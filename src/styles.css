@@ -1,0 +1,14 @@
+h1 {
+    color: #000000;
+    font-family: sans-serif;
+    font-size: 3em;
+    text-align: center;
+    justify-content: center;
+}
+
+h2 {
+    color: green;
+    font-family: sans-serif;
+    font-size: 2em;
+    text-align: top;
+}
