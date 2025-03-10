@@ -9,7 +9,10 @@ if TYPE_CHECKING:
 import pandas as pd
 from bokeh.plotting import figure
 from bokeh.layouts import column, row
-from bokeh.models import Select, Button, ColumnDataSource, TableColumn, DataTable, Div
+from bokeh.models import (
+    Select, Button, ColumnDataSource, TableColumn, 
+    DataTable, Div, Circle, Legend, LegendItem
+)
 from bokeh.models.css import Styles
 from bokeh.sampledata.us_states import data as states
 
@@ -23,6 +26,23 @@ class AirlineApp():
 
         # Load data into memory
         self.df = pd.read_csv(r'./data/processed-data.csv')
+
+        # Calculate coordinates for all airports in dataset
+        self.airport_coords = {
+            row['airport_name_concat_1']: (row['longitude_1'], row['latitude_1']) 
+            for _, row in 
+                self.df[['airport_name_concat_1', 'longitude_1', 'latitude_1']]
+                    .drop_duplicates()
+                    .iterrows()
+        }
+
+        self.airport_coords.update({
+            row['airport_name_concat_2']: (row['longitude_2'], row['latitude_2']) 
+            for _, row in 
+                self.df[['airport_name_concat_2', 'longitude_2', 'latitude_2']]
+                    .drop_duplicates()
+                    .iterrows()
+        })
 
         # Load CSS
         with open(r'./src/styles.css') as f:
@@ -113,9 +133,11 @@ class AirlineApp():
         """Function to initialize the choropleth chart. No data should be plotted yet.
         """
 
+        # State latitude & longitude
         state_xs = [states[code]["lons"] for code in states if code not in self.EXCLUDED]
         state_ys = [states[code]["lats"] for code in states if code not in self.EXCLUDED]
 
+        # Figure for Choropleth
         self.choropleth = figure(
             title='Average Airfare Prices',
             height=400,
@@ -125,6 +147,8 @@ class AirlineApp():
             margin=self.default_margins
         )
         self.choropleth.grid.grid_line_color = None
+
+        # State outline
         self.choropleth.patches(
             state_xs, 
             state_ys, 
@@ -134,6 +158,39 @@ class AirlineApp():
             line_width=2, 
             line_alpha=0.3
         )
+
+        # Circles for origin / destination
+        x0, y0 = self.airport_coords['SAN - San Diego International Airport']
+        self.origin_circle = Circle(
+            x=x0,
+            y=y0,
+            radius=0,
+            fill_color='#0000FF',
+            name='Origin'
+        )
+
+        self.destination_circle = Circle(
+            x=x0,
+            y=y0,
+            radius=0,
+            fill_color='#FF0000',
+            name='Destination'
+        )
+
+        origin_renderer = self.choropleth.add_glyph(self.origin_circle)
+        destination_renderer = self.choropleth.add_glyph(self.destination_circle)
+
+        # Create Legend
+        legend = Legend(
+            items=[
+                LegendItem(label='Origin', renderers=[origin_renderer], index=0),
+                LegendItem(label='Destination', renderers=[destination_renderer], index=0)
+            ], 
+            title='',
+            orientation='horizontal'
+        )
+
+        self.choropleth.add_layout(legend, 'below')
 
         return None
 
@@ -222,12 +279,12 @@ class AirlineApp():
         return None
     
 
-    def _update_analysis_results(self) -> None:
-        self.analysis_results.text = '<h2>$ 130.00</h2>'
+    def _update_analysis_results(self, value: float) -> None:
+        self.analysis_results.text = f'<h2>$ {value:.2f}</h2>'
         return None
     
 
-    def update_all_charts(self) -> None:
+    def _update_all_charts(self) -> None:
         """Update all charts when an input value is changed
         """
         self._update_choropleth()
@@ -253,9 +310,20 @@ class AirlineApp():
 
         self.dropdown_destination.options = new_options
 
-        # Update charts
-        self.update_all_charts()
+        if new != '':
+
+            # Update Circle at Origin
+            x, y = self.airport_coords[new]
+            self.origin_circle.x = x
+            self.origin_circle.y = y
+            self.origin_circle.radius = 0.3
+
+            # Update charts
+            self._update_all_charts()
         
+        else:
+            self.origin_circle.radius = 0
+
         return None
 
 
@@ -272,10 +340,22 @@ class AirlineApp():
             new_options = [''] + list(
                 self.df[self.df['airport_name_concat_2'] == new]['airport_name_concat_1'].unique()
             )
+
         self.dropdown_origin.options = new_options
 
-        # Update charts
-        self.update_all_charts()
+        if new != '':
+
+            # Update Circle at Destination
+            x, y = self.airport_coords[new]
+            self.destination_circle.x = x
+            self.destination_circle.y = y
+            self.destination_circle.radius = 0.3
+
+            # Update charts
+            self._update_all_charts()
+
+        else:
+            self.destination_circle.radius = 0
 
         return None
 
@@ -289,6 +369,20 @@ class AirlineApp():
     def _handle_ml_model_input_change(self, attr, old, new) -> None:
         """Executed whenever the "ML Model" selection changes
         """
+        return None
+
+
+    def _handle_analyze_button_click(self, event) -> None:
+        """Executed whenever the "Analyze" button is clicked
+        """
+
+        # Perform analysis
+        # ...
+
+        # Update results
+        estimated_price = 130.00
+        self._update_analysis_results(estimated_price)
+
         return None
     
 
@@ -316,7 +410,7 @@ class AirlineApp():
         )
 
         analyze_button = Button(label='Analyze', height=35, width=200, margin=(0, 200, 0, 20), align='end')
-        analyze_button.on_click(self._update_analysis_results)
+        analyze_button.on_click(self._handle_analyze_button_click)
         analyzer_io = row(
             self.dropdown_ml_model, 
             analyze_button,
