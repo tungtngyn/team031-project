@@ -33,21 +33,27 @@ class AirlineApp():
         self.dropdown_origin = Select(
             title='Origin', 
             value='',
-            options=list(self.df['airport_name_concat_1'].unique()), 
+            options=[''] + list(self.df['airport_name_concat_1'].unique()), 
             margin=self.default_margins, 
             width=200
+        )
+        self.dropdown_origin.on_change(
+            'value', self._handle_origin_input_change
         )
 
         self.dropdown_destination = Select(
             title='Destination', 
             value='',
-            options=list(self.df['airport_name_concat_2'].unique()), 
+            options=[''] + list(self.df['airport_name_concat_2'].unique()), 
             margin=self.default_margins, 
             width=200
         )
+        self.dropdown_destination.on_change(
+            'value', self._handle_destination_input_change
+        )
 
         self.dropdown_season = Select(
-            title='Season', 
+            title='Season of Travel', 
             value='', 
             options = [
                 'Spring',
@@ -57,6 +63,9 @@ class AirlineApp():
             ], 
             margin=self.default_margins, 
             width=200
+        )
+        self.dropdown_season.on_change(
+            'value', self._handle_season_input_change
         )
 
         self.dropdown_ml_model = Select(
@@ -68,6 +77,9 @@ class AirlineApp():
                 'FB Prophet'
             ],
             width=200
+        )
+        self.dropdown_ml_model.on_change(
+            'value', self._handle_ml_model_input_change
         )
 
         self.button_run_analyzer = Button(
@@ -98,58 +110,8 @@ class AirlineApp():
         return None
 
 
-    def _update_choropleth(self) -> None:
-        """Updates choropleth chart based on inputs
-        """
-
-        state_colors = []
-        for code in states:
-            if code not in self.EXCLUDED:
-                state_colors.append()
-
-        # Update colors
-        self.choropleth.fill_color = state_colors
-
-        # Update circles
-
-        return None
-
-
-    def _update_histograms(self) -> None:
-        return None
-
-
-    def _update_market_analysis_charts(self) -> None:
-        return None
-
-
-    def _input_change_detector(self) -> None:
-        return None
-
-
-    def update_charts(self) -> None:
-        """Update all charts when an input value is changed
-        """
-        self._update_choropleth()
-        self._update_histograms()
-        self._update_market_analysis_charts()
-
-        return None
-    
-
-    def update_analyzer_charts(self) -> None:
-        """Updates the analyzer charts when a new ML model is selected / run
-        """
-        return None
-    
-
-    def update_analysis_results(self) -> None:
-        self.analysis_results.text = '<h2>$ 130.00</h2>'
-        return None
-
-
     def _initialize_choropleth(self) -> None:
-        """Initializes the choropleth chart
+        """Function to initialize the choropleth chart. No data should be plotted yet.
         """
 
         state_xs = [states[code]["lons"] for code in states if code not in self.EXCLUDED]
@@ -178,9 +140,9 @@ class AirlineApp():
 
 
     def _initialize_histogram(self) -> None:
-
-        # Example: 
-        # https://docs.bokeh.org/en/latest/docs/examples/topics/stats/histogram.html
+        """Function to initialize the histogram charts. No data should be plotted yet.
+        """
+        # Example: https://docs.bokeh.org/en/latest/docs/examples/topics/stats/histogram.html
 
         self.histogram = figure(
             title='Histogram',
@@ -193,8 +155,10 @@ class AirlineApp():
 
 
     def _initialize_analyzer_charts(self) -> None:
-        # Taken from:
-        # https://docs.bokeh.org/en/latest/docs/examples/topics/stats/boxplot.html
+        """Function to initialize the analysis charts. No data should be plotted yet.
+        """
+        # Example: https://docs.bokeh.org/en/latest/docs/examples/topics/stats/boxplot.html
+
         self.analyzer_charts = figure(
             title='Analyzer Charts',
             height=400,
@@ -205,6 +169,8 @@ class AirlineApp():
 
 
     def _initialize_market_analysis_charts(self) -> None:
+        """Function to initialize the market analysis charts. No data should be plotted yet.
+        """
         self.market_analysis_charts = figure(
             title='Market Analysis Boxplot',
             height=400,
@@ -223,6 +189,109 @@ class AirlineApp():
         )
         return None
 
+
+    def _update_choropleth(self) -> None:
+        """Updates choropleth chart based on inputs
+        """
+
+        # Update circle at Origin
+
+        # Update circle at Destination
+
+        # Update state colors
+        # state_colors = []
+        # for code in states:
+        #     if code not in self.EXCLUDED:
+        #         state_colors.append()
+
+        # self.choropleth.fill_color = state_colors
+
+        return None
+
+
+    def _update_histograms(self) -> None:
+        return None
+
+
+    def _update_market_analysis_charts(self) -> None:
+        return None
+    
+
+    def _update_analyzer_charts(self) -> None:
+        """Updates the analyzer charts when a new ML model is selected / run
+        """
+        return None
+    
+
+    def _update_analysis_results(self) -> None:
+        self.analysis_results.text = '<h2>$ 130.00</h2>'
+        return None
+    
+
+    def update_all_charts(self) -> None:
+        """Update all charts when an input value is changed
+        """
+        self._update_choropleth()
+        self._update_histograms()
+        self._update_market_analysis_charts()
+
+        return None
+    
+
+    def _handle_origin_input_change(self, attr, old, new) -> None:
+        """Executed whenever the "Origin" airport changes
+        """
+
+        # Update Destination dropdown to relevant values
+        if new == '':
+            new_options = [''] + list(
+                self.df['airport_name_concat_2'].unique()
+            )
+        else:
+            new_options = [''] + list(
+                self.df[self.df['airport_name_concat_1'] == new]['airport_name_concat_2'].unique()
+            )
+
+        self.dropdown_destination.options = new_options
+
+        # Update charts
+        self.update_all_charts()
+        
+        return None
+
+
+    def _handle_destination_input_change(self, attr, old, new) -> None:
+        """Executed whenever the "Destination" airport changes
+        """
+
+        # Update Origin dropdown to relevant values
+        if new == '':
+            new_options = [''] + list(
+                self.df['airport_name_concat_1'].unique()
+            )
+        else:
+            new_options = [''] + list(
+                self.df[self.df['airport_name_concat_2'] == new]['airport_name_concat_1'].unique()
+            )
+        self.dropdown_origin.options = new_options
+
+        # Update charts
+        self.update_all_charts()
+
+        return None
+
+
+    def _handle_season_input_change(self, attr, old, new) -> None:
+        """Executed whenever the "Season" changes
+        """
+        return None
+
+
+    def _handle_ml_model_input_change(self, attr, old, new) -> None:
+        """Executed whenever the "ML Model" selection changes
+        """
+        return None
+    
 
     def build(self) -> Union[Row, Column, GridBox, GridPlot]:
         """Builds the webapp layout
@@ -248,7 +317,7 @@ class AirlineApp():
         )
 
         analyze_button = Button(label='Analyze', height=35, width=200, margin=(0, 200, 0, 20), align='end')
-        analyze_button.on_click(self.update_analysis_results)
+        analyze_button.on_click(self._update_analysis_results)
         analyzer_io = row(
             self.dropdown_ml_model, 
             analyze_button,
