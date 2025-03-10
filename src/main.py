@@ -7,10 +7,9 @@ if TYPE_CHECKING:
 
 
 import pandas as pd
-import numpy as np
 from bokeh.plotting import figure
-from bokeh.layouts import column, row, grid
-from bokeh.models import Select, Button, ColumnDataSource, TableColumn, DataTable, Div, Spacer
+from bokeh.layouts import column, row
+from bokeh.models import Select, Button, ColumnDataSource, TableColumn, DataTable, Div
 from bokeh.models.css import Styles
 from bokeh.sampledata.us_states import data as states
 
@@ -347,8 +346,6 @@ class AirlineApp():
             [
                 title,
                 inputs,
-                # row(spacer_left, title, spacer_right, sizing_mode='scale_width'),
-                # row(spacer_left, inputs, spacer_right, sizing_mode='scale_width'),
                 row(self.choropleth, self.histogram, sizing_mode='scale_width'),
                 row(
                     column(self.analyzer_charts, analyzer_io), 
