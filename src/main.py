@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Union
 if TYPE_CHECKING:
     from bokeh.models.layouts import Row, Column, GridBox
     from bokeh.models.plots import GridPlot
+    from bokeh.events import ButtonClick
 
 
 import pandas as pd
@@ -17,7 +18,7 @@ from bokeh.models.css import Styles
 from bokeh.sampledata.us_states import data as states
 
 
-class AirlineApp():
+class AirfarePredictionApp():
 
     def __init__(self) -> None:
 
@@ -108,13 +109,6 @@ class AirlineApp():
             width=200
         )
 
-        self.button_update_charts = Button(
-            label='Update Charts',
-            button_type='success',
-            margin=self.default_margins,
-            width=200
-        )
-
         self.analysis_results = Div(
             text="<h2>$   -  </h2>", 
             height=50, 
@@ -147,6 +141,7 @@ class AirlineApp():
             margin=self.default_margins
         )
         self.choropleth.grid.grid_line_color = None
+        self.choropleth.toolbar.logo = None
 
         # State outline
         self.choropleth.patches(
@@ -206,6 +201,7 @@ class AirlineApp():
             width=800,
             margin=self.default_margins
         )
+        self.histogram.toolbar.logo = None
 
         return None
 
@@ -221,6 +217,8 @@ class AirlineApp():
             width=800,
             margin=self.default_margins
         )
+        self.analyzer_charts.toolbar.logo = None
+
         return None
 
 
@@ -233,15 +231,17 @@ class AirlineApp():
             width=550 - 15,
             margin=(0, 10, 0, 10)
         )
+        self.market_analysis_charts.toolbar.logo = None
 
         self.market_analysis_table = DataTable(
             columns=[
-                TableColumn(field='Airport'),
-                TableColumn(field='Avg Price')
+                TableColumn(field='Origin Airport'),
+                TableColumn(field='Avg. Price to Dest.')
             ],
             height=400,
             width=250 - 15,
-            margin=(0, 10, 0, 10)
+            margin=(0, 10, 0, 10),
+            index_position=None
         )
         return None
 
@@ -250,11 +250,29 @@ class AirlineApp():
         """Updates choropleth chart based on inputs
         """
 
-        # Update circle at Origin
+        # Update Circle at Origin
+        origin_value = self.dropdown_origin.value
+        if origin_value != '':
+            x, y = self.airport_coords[origin_value]
+            self.origin_circle.x = x
+            self.origin_circle.y = y
+            self.origin_circle.radius = 0.3
 
-        # Update circle at Destination
+        else:
+            self.origin_circle.radius = 0
 
-        # Update state colors
+        # Update Circle at Destination
+        destination_value = self.dropdown_destination.value
+        if destination_value != '':
+            x, y = self.airport_coords[destination_value]
+            self.destination_circle.x = x
+            self.destination_circle.y = y
+            self.destination_circle.radius = 0.3
+
+        else:
+            self.destination_circle.radius = 0
+
+        # Update State Colors
         # state_colors = []
         # for code in states:
         #     if code not in self.EXCLUDED:
@@ -266,10 +284,14 @@ class AirlineApp():
 
 
     def _update_histograms(self) -> None:
+        """Updates the histogram charts when a new origin/destination is selected.
+        """
         return None
 
 
     def _update_market_analysis_charts(self) -> None:
+        """Updates the market analysis charts when a new origin/destination is selected.
+        """
         return None
     
 
@@ -284,17 +306,7 @@ class AirlineApp():
         return None
     
 
-    def _update_all_charts(self) -> None:
-        """Update all charts when an input value is changed
-        """
-        self._update_choropleth()
-        self._update_histograms()
-        self._update_market_analysis_charts()
-
-        return None
-    
-
-    def _handle_origin_input_change(self, attr, old, new) -> None:
+    def _handle_origin_input_change(self, attr: str, old: str, new: str) -> None:
         """Executed whenever the "Origin" airport changes
         """
 
@@ -310,24 +322,15 @@ class AirlineApp():
 
         self.dropdown_destination.options = new_options
 
-        if new != '':
-
-            # Update Circle at Origin
-            x, y = self.airport_coords[new]
-            self.origin_circle.x = x
-            self.origin_circle.y = y
-            self.origin_circle.radius = 0.3
-
-            # Update charts
-            self._update_all_charts()
-        
-        else:
-            self.origin_circle.radius = 0
+        # Update charts
+        self._update_choropleth()
+        self._update_histograms()
+        self._update_market_analysis_charts()
 
         return None
 
 
-    def _handle_destination_input_change(self, attr, old, new) -> None:
+    def _handle_destination_input_change(self, attr: str, old: str, new: str) -> None:
         """Executed whenever the "Destination" airport changes
         """
 
@@ -343,44 +346,51 @@ class AirlineApp():
 
         self.dropdown_origin.options = new_options
 
-        if new != '':
-
-            # Update Circle at Destination
-            x, y = self.airport_coords[new]
-            self.destination_circle.x = x
-            self.destination_circle.y = y
-            self.destination_circle.radius = 0.3
-
-            # Update charts
-            self._update_all_charts()
-
-        else:
-            self.destination_circle.radius = 0
+        # Update charts
+        self._update_choropleth()
+        self._update_histograms()
+        self._update_market_analysis_charts()
 
         return None
 
 
-    def _handle_season_input_change(self, attr, old, new) -> None:
+    def _handle_season_input_change(self, attr: str, old: str, new: str) -> None:
         """Executed whenever the "Season" changes
         """
+
+        # Reset prediction
+        self.analysis_results.text="<h2>$   -  </h2>"
+
         return None
 
 
-    def _handle_ml_model_input_change(self, attr, old, new) -> None:
+    def _handle_ml_model_input_change(self, attr: str, old: str, new: str) -> None:
         """Executed whenever the "ML Model" selection changes
         """
+
+        # Reset prediction
+        self.analysis_results.text="<h2>$   -  </h2>"
+        
         return None
 
 
-    def _handle_analyze_button_click(self, event) -> None:
+    def _handle_analyze_button_click(self, event: ButtonClick) -> None:
         """Executed whenever the "Analyze" button is clicked
         """
 
-        # Perform analysis
+        # Get data for inference. Full processed data available in self.df
+        origin = self.dropdown_origin.value           # returns "airport_name_concat_1" (SAN - San Diego International Airport)
+        destination = self.dropdown_destination.value # returns "airport_name_concat_2"
+        season = self.dropdown_season.value           # returns "season"
+
+        # Perform inference
+        # ...
+        estimated_price = 130.00 # update this
+
+        # Update analysis charts
         # ...
 
-        # Update results
-        estimated_price = 130.00
+        # Update analysis results
         self._update_analysis_results(estimated_price)
 
         return None
