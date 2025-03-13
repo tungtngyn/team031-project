@@ -1,8 +1,4 @@
 from bokeh.io import curdoc
-from bokeh.settings import settings
-settings.ico_path = r'./src/airfare.ico'
-
-
 from src.main import AirfarePredictionApp
 
 layout = AirfarePredictionApp().build()
