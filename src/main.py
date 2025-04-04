@@ -12,13 +12,23 @@ import numpy as np
 from bokeh.plotting import figure
 from bokeh.layouts import column, row
 from bokeh.models import (
-    Select, Button, ColumnDataSource, TableColumn, 
-    DataTable, Div, ImageURL, LabelSet, Patches, 
-    ColorBar, CategoricalColorMapper, HoverTool
+    Select, Button, ColumnDataSource, Div, ImageURL, LabelSet, Patches, 
+    ColorBar, CategoricalColorMapper, HoverTool, Range1d
 )
 from bokeh.models.css import Styles
 from bokeh.sampledata.us_states import data as states
 from bokeh.palettes import RdYlGn6 as palette
+
+import holoviews as hv
+from holoviews.streams import Stream
+
+hv.extension('bokeh')
+
+
+# Custom streamer to update HoloViews DynamicMap plots
+class UpdateStream(Stream):
+    def event(self, **kwargs):
+        super().event(**kwargs) # Triggers the update
 
 
 class AirfarePredictionApp():
@@ -62,6 +72,7 @@ class AirfarePredictionApp():
             title='Season of Travel', 
             value='', 
             options = [
+                'All',
                 'Spring',
                 'Summer',
                 'Fall',
@@ -79,6 +90,7 @@ class AirfarePredictionApp():
             value='', 
             margin=(0, 20, 0, 20), 
             options = [
+                '',
                 'Random Forest',
                 'FB Prophet'
             ],
@@ -198,7 +210,7 @@ class AirfarePredictionApp():
             text_alpha=0.0,
             text_font_size='8pt',
             x_offset=-16,
-            y_offset=-22, 
+            y_offset=-20, 
             source=self.choropleth_origin_src
         )
 
@@ -229,7 +241,7 @@ class AirfarePredictionApp():
             text_alpha=0.0,
             text_font_size='8pt',
             x_offset=-28,
-            y_offset=-20, 
+            y_offset=-14, 
             source=self.choropleth_dest_src
         )
 
@@ -260,62 +272,6 @@ class AirfarePredictionApp():
         
         self.choropleth.add_layout(self.choropleth_color_bar, 'below')
 
-        return None
-
-
-    def _initialize_histogram(self) -> None:
-        """Function to initialize the histogram charts. No data should be plotted yet.
-        """
-        # Example: https://docs.bokeh.org/en/latest/docs/examples/topics/stats/histogram.html
-
-        self.histogram = figure(
-            title='Histogram',
-            height=400,
-            width=800,
-            margin=self.default_margins
-        )
-        self.histogram.toolbar.logo = None
-
-        return None
-
-
-    def _initialize_analyzer_charts(self) -> None:
-        """Function to initialize the analysis charts. No data should be plotted yet.
-        """
-        # Example: https://docs.bokeh.org/en/latest/docs/examples/topics/stats/boxplot.html
-
-        self.analyzer_charts = figure(
-            title='Analyzer Charts',
-            height=400,
-            width=800,
-            margin=self.default_margins
-        )
-        self.analyzer_charts.toolbar.logo = None
-
-        return None
-
-
-    def _initialize_market_analysis_charts(self) -> None:
-        """Function to initialize the market analysis charts. No data should be plotted yet.
-        """
-        self.market_analysis_charts = figure(
-            title='Market Analysis Boxplot',
-            height=400,
-            width=550 - 15,
-            margin=(0, 10, 0, 10)
-        )
-        self.market_analysis_charts.toolbar.logo = None
-
-        self.market_analysis_table = DataTable(
-            columns=[
-                TableColumn(field='Origin Airport'),
-                TableColumn(field='Avg. Price to Dest.')
-            ],
-            height=400,
-            width=250 - 15,
-            margin=(0, 10, 0, 10),
-            index_position=None
-        )
         return None
 
 
@@ -418,15 +374,19 @@ class AirfarePredictionApp():
         return None
 
 
-    def _update_histograms(self) -> None:
-        """Updates the histogram charts when a new origin/destination is selected.
+    def _initialize_analyzer_charts(self) -> None:
+        """Function to initialize the analysis charts. No data should be plotted yet.
         """
-        return None
+        # Example: https://docs.bokeh.org/en/latest/docs/examples/topics/stats/boxplot.html
 
+        self.analyzer_charts = figure(
+            title='Analyzer Charts',
+            height=400,
+            width=800,
+            margin=self.default_margins
+        )
+        self.analyzer_charts.toolbar.logo = None
 
-    def _update_market_analysis_charts(self) -> None:
-        """Updates the market analysis charts when a new origin/destination is selected.
-        """
         return None
     
 
@@ -439,7 +399,264 @@ class AirfarePredictionApp():
     def _update_analysis_results(self, value: float) -> None:
         self.analysis_results.text = f'<h2>$ {value:.2f}</h2>'
         return None
+
+
+    def _get_filtered_data(self) -> pd.DataFrame:
+        """Returns a filtered dataframe based on the options selected
+        """
+
+        filtered_df = self.df.copy(deep=True)
+
+        if self.dropdown_origin.value != '':
+            filtered_df = filtered_df[
+                filtered_df['airport_name_concat_1'] == self.dropdown_origin.value
+            ]
+
+        if self.dropdown_destination.value != '':
+            filtered_df = filtered_df[
+                filtered_df['airport_name_concat_2'] == self.dropdown_destination.value
+            ]
+
+        if self.dropdown_season.value != '' and self.dropdown_season != 'All':
+            filtered_df = filtered_df[
+                filtered_df['season'] == self.dropdown_season.value
+            ]
+
+        return filtered_df
+
+
+    def _redraw_holoviews_histogram(self) -> hv.Histogram:
+        """Function to redefine the histogram using the HoloViews API
+        """
+
+        # Tooltip
+        hover_tooltips = [
+            ('Frequency', '@top')
+        ]
+        
+        # Initialize with invisible chart
+        if any([self.dropdown_origin.value == '', self.dropdown_destination == '']):
+            alpha = 0.
+            
+        else:
+            alpha = 0.8
+
+        # Get filtered data
+        filtered_df = self._get_filtered_data()
+
+        # Calculate histogram
+        bins = np.arange(filtered_df["fare"].min(), filtered_df["fare"].max() + 20, 20)
+        hist, edges = np.histogram(filtered_df["fare"], bins=bins)
+
+        # Update limits based on values
+        self.histogram_xlim = Range1d(edges[0] - 20, edges[-1] + 20)
+        self.histogram_ylim = Range1d(0, np.max(hist) + 20)
+
+        return hv.Histogram((edges, hist)).opts(
+            xlabel="Fare (Large Market Share)",
+            ylabel="Frequency",
+            title=f"Fare Distribution",
+            width=800, 
+            height=400, 
+            tools=["hover"],
+            color="#aec7e8", 
+            line_color="black", 
+            alpha=alpha,
+            hover_tooltips=hover_tooltips,
+            margin=self.default_margins
+        )
+
+
+    def _initialize_histogram(self) -> None:
+        """Function to initialize the histogram charts.
+        """
+        self.hv_histogram = hv.DynamicMap(self._redraw_holoviews_histogram, streams=[UpdateStream()])
+        self.bk_histogram = hv.render(self.hv_histogram)
+        self.bk_histogram.toolbar.logo = None
+        return None
+
+
+    def _update_histogram(self) -> None:
+        """Updates the histogram chart when new options are selected.
+        """
+        self.hv_histogram.event() # Trigger a redraw, recalculate xlim, ylim
+        self.bk_histogram.x_range = self.histogram_xlim
+        self.bk_histogram.y_range = self.histogram_ylim
+        return None
     
+
+    def _redraw_holoviews_line_chart(self) -> hv.Overlay:
+        """Function to redefine the line chart using the HoloViews API
+        """
+
+        # Tooltips
+        hover_tooltips = [
+            ('Year', '@year'),
+            ('Avg. Fare', '@avg_fare'),
+            ('Avg. Fare (Low)', '@avg_fare_low'),
+            ('Avg. Fare (Lg)', '@avg_fare_lg')
+        ]
+        
+        # Initialize with invisible chart
+        if any([self.dropdown_origin.value == '', self.dropdown_destination == '']):
+            alpha = 0.
+            
+        else:
+            alpha = 0.8
+
+        # Get filtered data
+        filtered_df = self._get_filtered_data()
+
+        # Aggregate
+        avg_fare_by_year = filtered_df.groupby("year").agg(
+            avg_fare=("fare", "mean"),
+            avg_fare_lg=("fare_lg", "mean"),
+            avg_fare_low=("fare_low", "mean")
+        ).reset_index()
+        
+        # Update limits based on values
+        self.line_chart_xlim = Range1d(filtered_df['year'].min(), filtered_df['year'].max())
+        self.line_chart_ylim = Range1d(0, avg_fare_by_year['avg_fare'].max() + 20)
+
+        # Line charts
+        avg_fare_line = hv.Curve(
+            avg_fare_by_year, 
+            "year", 
+            "avg_fare", 
+            label="Avg Fare"
+        ).opts(
+            line_color="blue", 
+            line_width=2, 
+            tools=["hover"], 
+            alpha=alpha, 
+            hover_tooltips=hover_tooltips
+        )
+
+        avg_fare_lg_line = hv.Curve(
+            avg_fare_by_year, 
+            "year", 
+            "avg_fare_lg", 
+            label="Avg Fare (Largest Airline)"
+        ).opts(
+            line_color="#D3D3D3", 
+            line_width=2, 
+            line_dash="dashed", 
+            tools=["hover"], 
+            alpha=alpha, 
+            hover_tooltips=hover_tooltips
+        )
+
+        avg_fare_low_line = hv.Curve(
+            avg_fare_by_year, 
+            "year", 
+            "avg_fare_low", 
+            label="Avg Fare (Lowest-Cost Airline)"
+        ).opts(
+            line_color="#808080", 
+            line_width=2, 
+            line_dash="dotted", 
+            tools=["hover"],
+            alpha=alpha, 
+            hover_tooltips=hover_tooltips
+        )
+
+        return (avg_fare_line * avg_fare_lg_line * avg_fare_low_line).opts(
+            xlabel="Year", 
+            ylabel="Average Fare",
+            title=f"Average Fares by Year",
+            width=800, 
+            height=400, 
+            legend_position="bottom_left", 
+            tools=["hover"],
+            margin=self.default_margins
+        )
+    
+
+    def _initialize_line_chart(self) -> None:
+        """Function to initialize the line charts.
+        """
+        self.hv_line_chart = hv.DynamicMap(self._redraw_holoviews_line_chart, streams=[UpdateStream()])
+        self.bk_line_chart = hv.render(self.hv_line_chart)
+        self.bk_line_chart.toolbar.logo = None
+        return None
+
+
+    def _update_line_chart(self) -> None:
+        """Updates the line chart when new options are selected.
+        """
+        self.hv_line_chart.event() # Trigger a redraw, recalculate xlim, ylim
+        self.bk_line_chart.x_range = self.line_chart_xlim
+        self.bk_line_chart.y_range = self.line_chart_ylim
+        return None
+    
+
+    def _redraw_holoviews_seasonal_boxplot(self) -> hv.Overlay:
+        """Function to redefine the line chart using the HoloViews API
+        """
+        
+        # Initialize with invisible chart
+        if any([self.dropdown_origin.value == '', self.dropdown_destination == '']):
+            alpha = 0.
+            
+        else:
+            alpha = 0.8
+
+        # Get filtered data
+        filtered_df = self._get_filtered_data()
+
+        # Define the correct season order
+        season_order = ['Spring', 'Summer', 'Fall', 'Winter']
+        
+        # Convert season to categorical with specified order
+        filtered_df['season'] = pd.Categorical(
+            filtered_df['season'],
+            categories=season_order,
+            ordered=True
+        )
+        
+        # Sort by season
+        filtered_df = filtered_df.sort_values('season')
+        
+        # Update limits based on values
+        self.seasonal_boxplot_ylim = Range1d(0, filtered_df['fare'].max() + 20)
+
+        return hv.BoxWhisker(
+            filtered_df,
+            'season',
+            'fare'
+        ).opts(
+            title=f"Seasonal Fare Distribution",
+            width=800, 
+            height=400,
+            ylabel="Fare ($)", 
+            xlabel="Season",
+            box_color='season',
+            cmap='Category10',
+            show_legend=False,
+            box_alpha=alpha,
+            box_line_alpha=alpha,
+            outlier_alpha=alpha,
+            whisker_alpha=alpha,
+            margin=self.default_margins
+        )
+    
+
+    def _initialize_seasonal_boxplot(self) -> None:
+        """Function to initialize the seasonal boxplot.
+        """
+        self.hv_seasonal_boxplot = hv.DynamicMap(self._redraw_holoviews_seasonal_boxplot, streams=[UpdateStream()])
+        self.bk_seasonal_boxplot = hv.render(self.hv_seasonal_boxplot)
+        self.bk_seasonal_boxplot.toolbar.logo = None
+        return None
+
+
+    def _update_seasonal_boxplot(self) -> None:
+        """Updates the seasonal boxplot when new options are selected.
+        """
+        self.hv_seasonal_boxplot.event() # Trigger a redraw, recalculate ylim
+        self.bk_seasonal_boxplot.y_range = self.seasonal_boxplot_ylim
+        return None
+
 
     def _handle_origin_input_change(self, attr: str, old: str, new: str) -> None:
         """Executed whenever the "Origin" airport changes
@@ -459,8 +676,9 @@ class AirfarePredictionApp():
 
         # Update charts
         self._update_choropleth()
-        self._update_histograms()
-        self._update_market_analysis_charts()
+        self._update_histogram()
+        self._update_line_chart()
+        self._update_seasonal_boxplot()
 
         return None
 
@@ -483,8 +701,9 @@ class AirfarePredictionApp():
 
         # Update charts
         self._update_choropleth()
-        self._update_histograms()
-        self._update_market_analysis_charts()
+        self._update_histogram()
+        self._update_line_chart()
+        self._update_seasonal_boxplot()
 
         return None
 
@@ -495,6 +714,10 @@ class AirfarePredictionApp():
 
         # Reset prediction
         self.analysis_results.text="<h2>$   -  </h2>"
+
+        # Update charts
+        self._update_histogram()
+        self._update_line_chart()
 
         return None
 
@@ -538,8 +761,9 @@ class AirfarePredictionApp():
         # Build Components
         self._initialize_choropleth()
         self._initialize_histogram()
+        self._initialize_line_chart()
+        self._initialize_seasonal_boxplot()
         self._initialize_analyzer_charts()
-        self._initialize_market_analysis_charts()
 
         # Inputs & Controls
         controls = [
@@ -585,17 +809,31 @@ class AirfarePredictionApp():
             [
                 title,
                 inputs,
-                row(self.choropleth, self.histogram, sizing_mode='scale_width'),
                 row(
-                    column(self.analyzer_charts, analyzer_io), 
-                    row(
-                        column(table_title, self.market_analysis_table), 
-                        self.market_analysis_charts, 
-                        margin=self.default_margins
-                    ), sizing_mode='scale_width'
+                    column(self.choropleth, self.bk_line_chart, analyzer_io), 
+                    column(self.bk_histogram, self.bk_seasonal_boxplot), 
+                    sizing_mode='scale_width'
                 )
             ],
             sizing_mode='scale_width'
         )
+
+        # layout = column(
+        #     [
+        #         title,
+        #         inputs,
+        #         row(self.choropleth, self.bk_histogram, sizing_mode='scale_width'),
+        #         row(
+        #             column(self.analyzer_charts, analyzer_io), 
+        #             # row(
+        #             #     column(table_title, self.market_analysis_table), 
+        #             #     self.market_analysis_charts, 
+        #             #     margin=self.default_margins
+        #             # ), 
+        #             sizing_mode='scale_width'
+        #         )
+        #     ],
+        #     sizing_mode='scale_width'
+        # )
 
         return layout
