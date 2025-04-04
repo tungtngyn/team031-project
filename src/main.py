@@ -9,11 +9,13 @@ if TYPE_CHECKING:
 
 import pandas as pd
 import numpy as np
+from functools import partial
 from bokeh.plotting import figure
 from bokeh.layouts import column, row
 from bokeh.models import (
     Select, Button, ColumnDataSource, Div, ImageURL, LabelSet, Patches, 
-    ColorBar, CategoricalColorMapper, HoverTool, Range1d
+    ColorBar, CategoricalColorMapper, HoverTool, Range1d, FactorRange,
+    TabPanel, Tabs
 )
 from bokeh.models.css import Styles
 from bokeh.sampledata.us_states import data as states
@@ -138,9 +140,48 @@ class AirfarePredictionApp():
         # Calculate mapping between state abrvn & state name (ex. CA --> California)
         self.state_mapping = {k: v['name'] for k, v in states.items()}
 
+        # Bar chart ylim
+        self.bar_chart_xlim = {}
+        self.bar_chart_ylim = {}
+
         return None
 
 
+    # ----------------------------------------------------------------------------------------------
+    # Utilities
+    # ----------------------------------------------------------------------------------------------
+    def _update_analysis_results(self, value: float) -> None:
+        self.analysis_results.text = f'<h2>$ {value:.2f}</h2>'
+        return None
+
+
+    def _get_filtered_data(self) -> pd.DataFrame:
+        """Returns a filtered dataframe based on the options selected
+        """
+
+        filtered_df = self.df.copy(deep=True)
+
+        if self.dropdown_origin.value != '':
+            filtered_df = filtered_df[
+                filtered_df['airport_name_concat_1'] == self.dropdown_origin.value
+            ]
+
+        if self.dropdown_destination.value != '':
+            filtered_df = filtered_df[
+                filtered_df['airport_name_concat_2'] == self.dropdown_destination.value
+            ]
+
+        if self.dropdown_season.value != '' and self.dropdown_season != 'All':
+            filtered_df = filtered_df[
+                filtered_df['season'] == self.dropdown_season.value
+            ]
+
+        return filtered_df
+
+
+    # ----------------------------------------------------------------------------------------------
+    # Choropleth Functions
+    # ----------------------------------------------------------------------------------------------
     def _initialize_choropleth(self) -> None:
         """Function to initialize the choropleth chart. No data should be plotted yet.
         """
@@ -374,57 +415,9 @@ class AirfarePredictionApp():
         return None
 
 
-    def _initialize_analyzer_charts(self) -> None:
-        """Function to initialize the analysis charts. No data should be plotted yet.
-        """
-        # Example: https://docs.bokeh.org/en/latest/docs/examples/topics/stats/boxplot.html
-
-        self.analyzer_charts = figure(
-            title='Analyzer Charts',
-            height=400,
-            width=800,
-            margin=self.default_margins
-        )
-        self.analyzer_charts.toolbar.logo = None
-
-        return None
-    
-
-    def _update_analyzer_charts(self) -> None:
-        """Updates the analyzer charts when a new ML model is selected / run
-        """
-        return None
-    
-
-    def _update_analysis_results(self, value: float) -> None:
-        self.analysis_results.text = f'<h2>$ {value:.2f}</h2>'
-        return None
-
-
-    def _get_filtered_data(self) -> pd.DataFrame:
-        """Returns a filtered dataframe based on the options selected
-        """
-
-        filtered_df = self.df.copy(deep=True)
-
-        if self.dropdown_origin.value != '':
-            filtered_df = filtered_df[
-                filtered_df['airport_name_concat_1'] == self.dropdown_origin.value
-            ]
-
-        if self.dropdown_destination.value != '':
-            filtered_df = filtered_df[
-                filtered_df['airport_name_concat_2'] == self.dropdown_destination.value
-            ]
-
-        if self.dropdown_season.value != '' and self.dropdown_season != 'All':
-            filtered_df = filtered_df[
-                filtered_df['season'] == self.dropdown_season.value
-            ]
-
-        return filtered_df
-
-
+    # ----------------------------------------------------------------------------------------------
+    # Histogram Functions
+    # ----------------------------------------------------------------------------------------------
     def _redraw_holoviews_histogram(self) -> hv.Histogram:
         """Function to redefine the histogram using the HoloViews API
         """
@@ -485,6 +478,9 @@ class AirfarePredictionApp():
         return None
     
 
+    # ----------------------------------------------------------------------------------------------
+    # Line Chart Functions
+    # ----------------------------------------------------------------------------------------------
     def _redraw_holoviews_line_chart(self) -> hv.Overlay:
         """Function to redefine the line chart using the HoloViews API
         """
@@ -492,9 +488,9 @@ class AirfarePredictionApp():
         # Tooltips
         hover_tooltips = [
             ('Year', '@year'),
-            ('Avg. Fare', '@avg_fare'),
-            ('Avg. Fare (Low)', '@avg_fare_low'),
-            ('Avg. Fare (Lg)', '@avg_fare_lg')
+            ('Avg. Fare', '$@{avg_fare}{0.2f}'),
+            ('Avg. Fare (Low)', '$@{avg_fare_low}{0.2f}'),
+            ('Avg. Fare (Lg)', '$@{avg_fare_lg}{0.2f}')
         ]
         
         # Initialize with invisible chart
@@ -590,6 +586,9 @@ class AirfarePredictionApp():
         return None
     
 
+    # ----------------------------------------------------------------------------------------------
+    # Seasonal Boxplot Functions
+    # ----------------------------------------------------------------------------------------------
     def _redraw_holoviews_seasonal_boxplot(self) -> hv.Overlay:
         """Function to redefine the line chart using the HoloViews API
         """
@@ -656,8 +655,95 @@ class AirfarePredictionApp():
         self.hv_seasonal_boxplot.event() # Trigger a redraw, recalculate ylim
         self.bk_seasonal_boxplot.y_range = self.seasonal_boxplot_ylim
         return None
+    
+
+    # ----------------------------------------------------------------------------------------------
+    # Airline Chart Functions
+    # ----------------------------------------------------------------------------------------------
+    def _redraw_holoviews_bar_chart(self, carrier_type: str) -> hv.Bars:
+        """Function to redefine the bar chart using the HoloViews API
+        """
+        
+        # Tooltips
+        hover_tooltips = [
+            ('Avg. Fare', '$@{avg_fare}{0.2f}')
+        ]
+
+        # Initialize with invisible chart
+        if any([self.dropdown_origin.value == '', self.dropdown_destination == '']):
+            alpha = 0.
+            
+        else:
+            alpha = 0.8
+
+        # Get filtered data
+        filtered_df = self._get_filtered_data()
+
+        # Aggregate
+        col = 'fare_lg' if carrier_type == 'lg' else 'fare_low'
+        name_col = 'carrier_lg_name_concat' if carrier_type == 'lg' else 'carrier_low_name_concat'
+        
+        avg_data = filtered_df.groupby(name_col).agg(avg_fare=(col, "mean")).reset_index()
+        avg_data = avg_data.sort_values("avg_fare", ascending=False)[:10].reset_index(drop=True)
+
+        # Update limits based on values
+        self.bar_chart_xlim[carrier_type] = Range1d(0, avg_data['avg_fare'].max() + 20)
+        self.bar_chart_ylim[carrier_type] = FactorRange(*avg_data[name_col].to_list())
+    
+        return hv.Bars(avg_data, name_col, "avg_fare").opts(
+            xlabel=f"Average Fare ({'Largest' if carrier_type=='lg' else 'Lowest-Cost'} Carrier)",
+            ylabel="Airline",
+            title=f"Average Fare ({'Largest' if carrier_type=='lg' else 'Lowest-Cost'} Carrier) by Airline",
+            width=800, 
+            height=400, 
+            tools=["hover"],
+            invert_axes=True,
+            color="#1f77b4" if carrier_type == 'lg' else "#ff7f0e",
+            alpha=alpha,
+            hover_tooltips=hover_tooltips,
+            margin=self.default_margins
+        )
 
 
+    def _initialize_lg_bar_chart(self) -> None:
+        """Function to initialize the seasonal boxplot.
+        """
+        self.hv_lg_bar_chart = hv.DynamicMap(partial(self._redraw_holoviews_bar_chart, carrier_type='lg'), streams=[UpdateStream()])
+        self.bk_lg_bar_chart = hv.render(self.hv_lg_bar_chart)
+        self.bk_lg_bar_chart.toolbar.logo = None
+        return None
+
+
+    def _update_lg_bar_chart(self) -> None:
+        """Updates the seasonal boxplot when new options are selected.
+        """
+        self.hv_lg_bar_chart.event() # Trigger a redraw, recalculate ylim
+        self.bk_lg_bar_chart.x_range = self.bar_chart_xlim['lg']
+        self.bk_lg_bar_chart.y_range = self.bar_chart_ylim['lg']
+        return None
+
+
+    def _initialize_low_bar_chart(self) -> None:
+        """Function to initialize the seasonal boxplot.
+        """
+        self.hv_low_bar_chart = hv.DynamicMap(partial(self._redraw_holoviews_bar_chart, carrier_type='low'), streams=[UpdateStream()])
+        self.bk_low_bar_chart = hv.render(self.hv_low_bar_chart)
+        self.bk_low_bar_chart.toolbar.logo = None
+        return None
+
+
+    def _update_low_bar_chart(self) -> None:
+        """Updates the seasonal boxplot when new options are selected.
+        """
+        self.hv_low_bar_chart.event() # Trigger a redraw, recalculate ylim
+        self.bk_low_bar_chart.x_range = self.bar_chart_xlim['low']
+        self.bk_low_bar_chart.y_range = self.bar_chart_ylim['low']
+        return None
+    
+
+    # ----------------------------------------------------------------------------------------------
+    # Input Change Callback Functions
+    # ----------------------------------------------------------------------------------------------
     def _handle_origin_input_change(self, attr: str, old: str, new: str) -> None:
         """Executed whenever the "Origin" airport changes
         """
@@ -679,6 +765,8 @@ class AirfarePredictionApp():
         self._update_histogram()
         self._update_line_chart()
         self._update_seasonal_boxplot()
+        self._update_lg_bar_chart()
+        self._update_low_bar_chart()
 
         return None
 
@@ -704,6 +792,8 @@ class AirfarePredictionApp():
         self._update_histogram()
         self._update_line_chart()
         self._update_seasonal_boxplot()
+        self._update_lg_bar_chart()
+        self._update_low_bar_chart()
 
         return None
 
@@ -718,6 +808,8 @@ class AirfarePredictionApp():
         # Update charts
         self._update_histogram()
         self._update_line_chart()
+        self._update_lg_bar_chart()
+        self._update_low_bar_chart()
 
         return None
 
@@ -754,6 +846,9 @@ class AirfarePredictionApp():
         return None
     
 
+    # ----------------------------------------------------------------------------------------------
+    # Webapp Layout
+    # ----------------------------------------------------------------------------------------------
     def build(self) -> Union[Row, Column, GridBox, GridPlot]:
         """Builds the webapp layout
         """
@@ -763,7 +858,8 @@ class AirfarePredictionApp():
         self._initialize_histogram()
         self._initialize_line_chart()
         self._initialize_seasonal_boxplot()
-        self._initialize_analyzer_charts()
+        self._initialize_lg_bar_chart()
+        self._initialize_low_bar_chart()
 
         # Inputs & Controls
         controls = [
@@ -797,43 +893,28 @@ class AirfarePredictionApp():
             margin=(0, 20, 20, 20)
         )
 
-        table_title = Div(
-            text='<p><b>Next 3 Closest Airports<b></p>', 
-            height=30,
-            sizing_mode='stretch_width',
-            stylesheets=[self.css]
+        # Generate Layout
+        t1 = column(self.bk_histogram, self.bk_seasonal_boxplot)
+        t2 = column(self.bk_lg_bar_chart, self.bk_low_bar_chart)
+
+        tabs = Tabs(
+            tabs=[
+                TabPanel(child=t1, title="Analysis by Fare"),
+                TabPanel(child=t2, title="Analysis by Airline")
+            ]
         )
 
-        # Generate Layout
         layout = column(
             [
                 title,
                 inputs,
                 row(
                     column(self.choropleth, self.bk_line_chart, analyzer_io), 
-                    column(self.bk_histogram, self.bk_seasonal_boxplot), 
+                    tabs, 
                     sizing_mode='scale_width'
                 )
             ],
             sizing_mode='scale_width'
         )
-
-        # layout = column(
-        #     [
-        #         title,
-        #         inputs,
-        #         row(self.choropleth, self.bk_histogram, sizing_mode='scale_width'),
-        #         row(
-        #             column(self.analyzer_charts, analyzer_io), 
-        #             # row(
-        #             #     column(table_title, self.market_analysis_table), 
-        #             #     self.market_analysis_charts, 
-        #             #     margin=self.default_margins
-        #             # ), 
-        #             sizing_mode='scale_width'
-        #         )
-        #     ],
-        #     sizing_mode='scale_width'
-        # )
 
         return layout
