@@ -406,7 +406,7 @@ class AirfarePredictionApp():
                 # Hide / Reset if no data available
                 self.choropleth_state_src.data['colors'] = self.choropleth_default_colors
                 self.choropleth_state_src.data['avg_fares'] = self.choropleth_default_fares
-                self.choropleth_color_bar.udpate(color_mapper=self.choropleth_default_mapper)
+                self.choropleth_color_bar.update(color_mapper=self.choropleth_default_mapper)
 
 
         # Destination Value Updater
@@ -850,7 +850,7 @@ class AirfarePredictionApp():
 
         # FB Prophet Time Series Forecasting
         if self.dropdown_ml_model.value == 'FB Prophet':
-            # Check for Valid Inputs (note Prophet analysis needs origin and destination input)
+            # Check for Valid Inputs (note Prophet analysis only needs origin and destination input)
             if (origin == '') or (destination == ''):
                 print('Please select valid Origin and Destination from dropdown.')
             else:
@@ -897,7 +897,7 @@ class AirfarePredictionApp():
         self._update_analysis_results(estimated_price)
 
         return None
-    
+
 
     # ----------------------------------------------------------------------------------------------
     # Webapp Layout
