@@ -590,7 +590,7 @@ class AirfarePredictionApp():
     # Seasonal Boxplot Functions
     # ----------------------------------------------------------------------------------------------
     def _redraw_holoviews_seasonal_boxplot(self) -> hv.Overlay:
-        """Function to redefine the line chart using the HoloViews API
+        """Function to redefine the seasonal boxplot using the HoloViews API
         """
         
         # Initialize with invisible chart
@@ -706,7 +706,7 @@ class AirfarePredictionApp():
 
 
     def _initialize_lg_bar_chart(self) -> None:
-        """Function to initialize the seasonal boxplot.
+        """Function to initialize the "lg" carrier bar chart.
         """
         self.hv_lg_bar_chart = hv.DynamicMap(partial(self._redraw_holoviews_bar_chart, carrier_type='lg'), streams=[UpdateStream()])
         self.bk_lg_bar_chart = hv.render(self.hv_lg_bar_chart)
@@ -715,7 +715,7 @@ class AirfarePredictionApp():
 
 
     def _update_lg_bar_chart(self) -> None:
-        """Updates the seasonal boxplot when new options are selected.
+        """Updates the "lg" carrier bar chart when new options are selected.
         """
         self.hv_lg_bar_chart.event() # Trigger a redraw, recalculate ylim
         self.bk_lg_bar_chart.x_range = self.bar_chart_xlim['lg']
@@ -724,7 +724,7 @@ class AirfarePredictionApp():
 
 
     def _initialize_low_bar_chart(self) -> None:
-        """Function to initialize the seasonal boxplot.
+        """Function to initialize the "low" carrier bar chart.
         """
         self.hv_low_bar_chart = hv.DynamicMap(partial(self._redraw_holoviews_bar_chart, carrier_type='low'), streams=[UpdateStream()])
         self.bk_low_bar_chart = hv.render(self.hv_low_bar_chart)
@@ -733,7 +733,7 @@ class AirfarePredictionApp():
 
 
     def _update_low_bar_chart(self) -> None:
-        """Updates the seasonal boxplot when new options are selected.
+        """Updates the "low" carrier bar chart when new options are selected.
         """
         self.hv_low_bar_chart.event() # Trigger a redraw, recalculate ylim
         self.bk_low_bar_chart.x_range = self.bar_chart_xlim['low']
