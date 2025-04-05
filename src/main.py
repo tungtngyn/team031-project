@@ -853,9 +853,11 @@ class AirfarePredictionApp():
             # Check for Valid Inputs (note Prophet analysis only needs origin and destination input)
             if (origin == '') or (destination == ''):
                 print('Please select valid Origin and Destination from dropdown.')
+                return None
             else:
-                src, dst = origin.split()[0], destination.split()[0] # get 3 digit code
-                ts_df = self._get_filtered_data()[self.ts_cols] # filter to route data and desired cols
+                src, dst = origin.split()[0], destination.split()[0] # get 3 letter code
+                mask = (self.df.airport_iata_1 == src) & (self.df.airport_iata_2 == dst)
+                ts_df = self[self.ts_cols][mask].copy(deep=True) # filter to route data and desired cols
                 # Check if Data has 'year' ending in 2024
                 if ts_df['year'].max() != 2024:
                     print('Selected route ineligible for FB Prophet forecasting.')
