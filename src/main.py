@@ -857,7 +857,7 @@ class AirfarePredictionApp():
             else:
                 src, dst = origin.split()[0], destination.split()[0] # get 3 letter code
                 mask = (self.df.airport_iata_1 == src) & (self.df.airport_iata_2 == dst)
-                ts_df = self[self.ts_cols][mask].copy(deep=True) # filter to route data and desired cols
+                ts_df = self.df[self.ts_cols][mask].copy(deep=True) # filter to route data and desired cols
                 # Check if Data has 'year' ending in 2024
                 if ts_df['year'].max() != 2024:
                     print('Selected route ineligible for FB Prophet forecasting.')
