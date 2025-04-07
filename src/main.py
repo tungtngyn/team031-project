@@ -21,6 +21,12 @@ from bokeh.models.css import Styles
 from bokeh.sampledata.us_states import data as states
 from bokeh.palettes import RdYlGn6 as palette
 
+from prophet import Prophet
+from dev.fbp_tsa import (
+    find_longest_timeseq, fbp_predict_future
+) # import custom user functions
+import matplotlib.pyplot as plt
+
 import holoviews as hv
 from holoviews.streams import Stream
 
@@ -119,6 +125,8 @@ class AirfarePredictionApp():
 
         # Misc variables
         self.EXCLUDED = ('HI', 'AK') # Excluded states
+        self.multi_airport_codes = {'ACY', 'ORD', 'DTW', 'LGA', 'IAD', 'EGE'} # IATA codes with multiple airports after remapping
+        self.ts_cols = ['year', 'quarter', 'airport_iata_1', 'airport_iata_2', 'fare'] # time series columns
 
         # Calculate coordinates for all airports in dataset
         self.airport_coords = {
@@ -143,6 +151,9 @@ class AirfarePredictionApp():
         # Bar chart ylim
         self.bar_chart_xlim = {}
         self.bar_chart_ylim = {}
+
+        # Analysis Model
+        self.prophet_df = None  # store Prophet pd.DataFrame
 
         return None
 
@@ -395,7 +406,7 @@ class AirfarePredictionApp():
                 # Hide / Reset if no data available
                 self.choropleth_state_src.data['colors'] = self.choropleth_default_colors
                 self.choropleth_state_src.data['avg_fares'] = self.choropleth_default_fares
-                self.choropleth_color_bar.udpate(color_mapper=self.choropleth_default_mapper)
+                self.choropleth_color_bar.update(color_mapper=self.choropleth_default_mapper)
 
 
         # Destination Value Updater
@@ -837,6 +848,50 @@ class AirfarePredictionApp():
         # ...
         estimated_price = 130.00 # update this
 
+        # FB Prophet Time Series Forecasting
+        if self.dropdown_ml_model.value == 'FB Prophet':
+            # Check for Valid Inputs (note Prophet analysis only needs origin and destination input)
+            if (origin == '') or (destination == ''):
+                print('Please select valid Origin and Destination from dropdown.')
+                return None
+            else:
+                src, dst = origin.split()[0], destination.split()[0] # get 3 letter code
+                mask = (self.df.airport_iata_1 == src) & (self.df.airport_iata_2 == dst)
+                ts_df = self.df[self.ts_cols][mask].copy(deep=True) # filter to route data and desired cols
+                # Check if Data has 'year' ending in 2024
+                if ts_df['year'].max() != 2024:
+                    print('Selected route ineligible for FB Prophet forecasting.')
+                    print('Please select a different route.')
+                    return None
+                ts_df['date'] = ts_df['year'].astype(str) \
+                    .str.cat(ts_df['quarter'].astype(str), sep='-Q')  # example output '2024-Q1'
+                # Check if Data needs to be Aggregated for Codes that have Multiple Airports
+                if {src, dst}.intersection(self.multi_airport_codes): # if non-empty set intersection
+                    ts_df = ts_df.groupby(['date'], as_index=False, sort=False).agg({'fare': 'mean'})
+                ts_df = ts_df.sort_values(by='date').reset_index(drop=True)
+                # Extract the Longest Nonbreaking Sequence of Quarterly Dates
+                ts_df = find_longest_timeseq(data=ts_df, ycol='fare', min_rows=50) # returns DF or None
+                # Check if Data has at least 50 rows for Forecasting
+                if ts_df is None:
+                    print('Selected route ineligible for FB Prophet forecasting.')
+                    print('Please select a different route.')
+                    return None
+                # Use Prophet to make Predictions 8 Qtrs Ahead from 2024-Q1 to 2026-Q1
+                m = Prophet(seasonality_mode='multiplicative', yearly_seasonality=2)
+                fcst_df = fbp_predict_future(model=m, data=ts_df, n=8)
+                self.prophet_df = pd.concat([ts_df,
+                                            fcst_df[['ds', 'yhat']].rename(columns={'yhat': 'y'})],
+                                            ignore_index=True) # append fcst_df to ts_df
+                # Example Matplotlib Plot
+                # self.prophet_df.plot.line(x='ds', y='y', color='blue',
+                #                             title='FB Prophet Forecasting',
+                #                             xlabel='Date', ylabel='Fare',
+                #                             linestyle='-', linewidth=1,
+                #                             marker='o',
+                #                             label=f'{src}-{dst}')
+                # print(self.prophet_df)
+                # plt.show()
+
         # Update analysis charts
         # ...
 
@@ -844,7 +899,7 @@ class AirfarePredictionApp():
         self._update_analysis_results(estimated_price)
 
         return None
-    
+
 
     # ----------------------------------------------------------------------------------------------
     # Webapp Layout
