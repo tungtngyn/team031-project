@@ -32,6 +32,9 @@ from holoviews.streams import Stream
 
 hv.extension('bokeh')
 
+import joblib
+import datetime
+
 
 # Custom streamer to update HoloViews DynamicMap plots
 class UpdateStream(Stream):
@@ -48,6 +51,12 @@ class AirfarePredictionApp():
 
         # Load data into memory
         self.df = pd.read_csv(r'./data/processed-data.csv')
+
+        # Load the saved XGBoost model pipeline
+        self.xgb_model = joblib.load(r'./dev/models/xgb_airfare_model.pkl')
+
+        # Load the saved CatBoost model pipeline
+        self.catboost_model = joblib.load(r'./dev/models/catboost_airfare_model.pkl')               
 
         # Load CSS
         with open(r'./src/styles.css') as f:
@@ -100,7 +109,9 @@ class AirfarePredictionApp():
             options = [
                 '',
                 'Random Forest',
-                'FB Prophet'
+                'FB Prophet',
+                'XGBoost',
+                'CatBoost'
             ],
             width=200
         )
@@ -188,6 +199,19 @@ class AirfarePredictionApp():
             ]
 
         return filtered_df
+    
+    def feature_engineering(self, df: pd.DataFrame) -> pd.DataFrame:
+        df = df.copy()
+        df['lat_diff'] = df['latitude_2'] - df['latitude_1']
+        df['lon_diff'] = df['longitude_2'] - df['longitude_1']
+        df['same_state'] = (df['state_1'] == df['state_2']).astype(int)
+        df['route'] = df['airport_iata_1'] + "-" + df['airport_iata_2']
+        df['distance_bin'] = pd.cut(
+            df['nsmiles'],
+            bins=[0, 500, 1500, 3000, 6000],
+            labels=['short', 'medium', 'long', 'ultra']
+        )
+        return df
 
 
     # ----------------------------------------------------------------------------------------------
@@ -844,9 +868,42 @@ class AirfarePredictionApp():
         destination = self.dropdown_destination.value # returns "airport_name_concat_2"
         season = self.dropdown_season.value           # returns "season"
 
-        # Perform inference
-        # ...
-        estimated_price = 130.00 # update this
+        # Use the existing function to filter the dataset
+        filtered_data = self._get_filtered_data()    
+        
+        # If no data is found, handle appropriately (e.g., return a default value)
+        if filtered_data.empty:
+            estimated_price = 0.0
+        else:
+            # Apply feature engineering to the filtered dataframe
+            engineered_data = self.feature_engineering(filtered_data)
+            
+            # Select a record (or aggregate as needed) for prediction
+            input_data = engineered_data.iloc[[0]]
+
+            # Override the 'year' column with the current year
+            input_data.loc[:, 'year'] = datetime.datetime.now().year
+          
+            # Ensure the input DataFrame has only the features the model expects
+            usable_features = [
+                'year', 'quarter', 'season', 
+                'airport_iata_1', 'airport_iata_2',
+                'state_1', 'state_2',
+                'latitude_1', 'longitude_1',
+                'latitude_2', 'longitude_2',
+                'nsmiles',
+                'lat_diff', 'lon_diff', 'same_state', 'route', 'distance_bin'
+            ]
+            input_data = input_data[usable_features]
+            
+            # Choose model based on dropdown selection
+            model_choice = self.dropdown_ml_model.value
+            if model_choice == 'XGBoost':
+                estimated_price = self.xgb_model.predict(input_data)[0]
+            elif model_choice == 'CatBoost':
+                estimated_price = self.catboost_model.predict(input_data)[0]
+            else:
+                estimated_price = 0.0
 
         # FB Prophet Time Series Forecasting
         if self.dropdown_ml_model.value == 'FB Prophet':
