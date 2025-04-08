@@ -66,7 +66,7 @@ class AirfarePredictionApp():
         self.dropdown_origin = Select(
             title='Origin', 
             value='',
-            options=[''] + list(self.df['airport_name_concat_1'].unique()), 
+            options=[''] + sorted(list(self.df['airport_name_concat_1'].unique())), 
             margin=self.default_margins, 
             width=200
         )
@@ -77,7 +77,7 @@ class AirfarePredictionApp():
         self.dropdown_destination = Select(
             title='Destination', 
             value='',
-            options=[''] + list(self.df['airport_name_concat_2'].unique()), 
+            options=[''] + sorted(list(self.df['airport_name_concat_2'].unique())), 
             margin=self.default_margins, 
             width=200
         )
@@ -89,7 +89,7 @@ class AirfarePredictionApp():
             title='Season of Travel', 
             value='', 
             options = [
-                'All',
+                '',
                 'Spring',
                 'Summer',
                 'Fall',
@@ -108,8 +108,9 @@ class AirfarePredictionApp():
             margin=(0, 20, 0, 20), 
             options = [
                 '',
-                'Random Forest',
                 'FB Prophet',
+                'Random Forest',
+                'Decision Tree',
                 'XGBoost',
                 'CatBoost'
             ],
@@ -127,7 +128,7 @@ class AirfarePredictionApp():
         )
 
         self.analysis_results = Div(
-            text="<h2>$   -  </h2>", 
+            text="Est. Price:<h2>$   -  </h2>", 
             height=50, 
             width=100, 
             margin=(0, 0, 0, 20), 
@@ -159,7 +160,7 @@ class AirfarePredictionApp():
         # Calculate mapping between state abrvn & state name (ex. CA --> California)
         self.state_mapping = {k: v['name'] for k, v in states.items()}
 
-        # Bar chart ylim
+        # Bar chart limits
         self.bar_chart_xlim = {}
         self.bar_chart_ylim = {}
 
@@ -173,11 +174,17 @@ class AirfarePredictionApp():
     # Utilities
     # ----------------------------------------------------------------------------------------------
     def _update_analysis_results(self, value: float) -> None:
-        self.analysis_results.text = f'<h2>$ {value:.2f}</h2>'
+        """Updates analysis results text box
+        """
+        if value == 0:
+            self.analysis_results.text = "Est. Price:<h2>$   -  </h2>"
+
+        else:
+            self.analysis_results.text = f'Est. Price:<h2>$ {value:.2f}</h2>'
         return None
 
 
-    def _get_filtered_data(self) -> pd.DataFrame:
+    def _get_filtered_data(self, filter_season: bool = False) -> pd.DataFrame:
         """Returns a filtered dataframe based on the options selected
         """
 
@@ -193,13 +200,15 @@ class AirfarePredictionApp():
                 filtered_df['airport_name_concat_2'] == self.dropdown_destination.value
             ]
 
-        if self.dropdown_season.value != '' and self.dropdown_season != 'All':
-            filtered_df = filtered_df[
-                filtered_df['season'] == self.dropdown_season.value
-            ]
+        if filter_season:
+            if self.dropdown_season.value != '' and self.dropdown_season != 'All':
+                filtered_df = filtered_df[
+                    filtered_df['season'] == self.dropdown_season.value
+                ]
 
         return filtered_df
     
+
     def feature_engineering(self, df: pd.DataFrame) -> pd.DataFrame:
         df = df.copy()
         df['lat_diff'] = df['latitude_2'] - df['latitude_1']
@@ -522,7 +531,8 @@ class AirfarePredictionApp():
 
         # Tooltips
         hover_tooltips = [
-            ('Year', '@year'),
+            ('Year', '@{date}{%Y}'),
+            ('Month', '@{date}{%m}'),
             ('Avg. Fare', '$@{avg_fare}{0.2f}'),
             ('Avg. Fare (Low)', '$@{avg_fare_low}{0.2f}'),
             ('Avg. Fare (Lg)', '$@{avg_fare_lg}{0.2f}')
@@ -536,23 +546,32 @@ class AirfarePredictionApp():
             alpha = 0.8
 
         # Get filtered data
-        filtered_df = self._get_filtered_data()
+        filtered_df = self._get_filtered_data(filter_season=False)
+        filtered_df['date'] = pd.to_datetime(
+            filtered_df['year'].astype(str) 
+            + '-' 
+            + filtered_df['quarter']
+                .map({1: 2, 2: 5, 3: 8, 4: 11}) # Quarter -> Month
+                .astype(str)
+                .str
+                .zfill(2)
+        )
 
         # Aggregate
-        avg_fare_by_year = filtered_df.groupby("year").agg(
+        avg_fare_by_year = filtered_df.groupby("date").agg(
             avg_fare=("fare", "mean"),
             avg_fare_lg=("fare_lg", "mean"),
             avg_fare_low=("fare_low", "mean")
         ).reset_index()
         
         # Update limits based on values
-        self.line_chart_xlim = Range1d(filtered_df['year'].min(), filtered_df['year'].max())
+        self.line_chart_xlim = Range1d(filtered_df['date'].min(), filtered_df['date'].max())
         self.line_chart_ylim = Range1d(0, avg_fare_by_year['avg_fare'].max() + 20)
 
         # Line charts
         avg_fare_line = hv.Curve(
             avg_fare_by_year, 
-            "year", 
+            "date", 
             "avg_fare", 
             label="Avg Fare"
         ).opts(
@@ -565,7 +584,7 @@ class AirfarePredictionApp():
 
         avg_fare_lg_line = hv.Curve(
             avg_fare_by_year, 
-            "year", 
+            "date", 
             "avg_fare_lg", 
             label="Avg Fare (Largest Airline)"
         ).opts(
@@ -579,7 +598,7 @@ class AirfarePredictionApp():
 
         avg_fare_low_line = hv.Curve(
             avg_fare_by_year, 
-            "year", 
+            "date", 
             "avg_fare_low", 
             label="Avg Fare (Lowest-Cost Airline)"
         ).opts(
@@ -591,13 +610,65 @@ class AirfarePredictionApp():
             hover_tooltips=hover_tooltips
         )
 
+        # Plot prophet if results present
+        if type(self.prophet_df) == pd.DataFrame:
+
+            # Get max historical date
+            max_date = filtered_df['date'].max()
+            
+            # Update limits based on Prophet values
+            self.line_chart_xlim = Range1d(filtered_df['date'].min(), self.prophet_df['ds'].max())
+            self.line_chart_ylim = Range1d(
+                0, 
+                max(
+                    avg_fare_by_year['avg_fare'].max(), 
+                    self.prophet_df['y'].max()
+                ) + 20
+            )
+            
+            filtered_prophet_df = (
+                self.prophet_df[self.prophet_df.ds > max_date]
+                    .rename(columns={'ds': 'date', 'y': 'avg_fare'})
+                    .copy(deep=True)
+                    .reset_index(drop=True)
+            )
+
+            avg_fare_prophet = hv.Curve(
+                filtered_prophet_df, 
+                "date", 
+                "avg_fare", 
+                label="Avg Fare (Forecast)"
+            ).opts(
+                line_color="red", 
+                line_width=2, 
+                tools=["hover"], 
+                alpha=alpha, 
+                hover_tooltips=hover_tooltips
+            )
+
+            return (avg_fare_line * avg_fare_lg_line * avg_fare_low_line * avg_fare_prophet).opts(
+                xlabel="Date", 
+                ylabel="Average Fare",
+                title=f"Average Fares Over Time",
+                width=800, 
+                height=400, 
+                legend_position='bottom',
+                legend_padding=5,
+                legend_spacing=30,
+                tools=["hover"],
+                margin=self.default_margins
+            )
+
+        # Else, plot normal results
         return (avg_fare_line * avg_fare_lg_line * avg_fare_low_line).opts(
-            xlabel="Year", 
+            xlabel="Date", 
             ylabel="Average Fare",
-            title=f"Average Fares by Year",
+            title=f"Average Fares Over Time",
             width=800, 
             height=400, 
-            legend_position="bottom_left", 
+            legend_position='bottom',
+            legend_padding=5,
+            legend_spacing=30,
             tools=["hover"],
             margin=self.default_margins
         )
@@ -785,13 +856,13 @@ class AirfarePredictionApp():
 
         # Update Destination dropdown to relevant values
         if new == '':
-            new_options = [''] + list(
+            new_options = [''] + sorted(list(
                 self.df['airport_name_concat_2'].unique()
-            )
+            ))
         else:
-            new_options = [''] + list(
+            new_options = [''] + sorted(list(
                 self.df[self.df['airport_name_concat_1'] == new]['airport_name_concat_2'].unique()
-            )
+            ))
 
         self.dropdown_destination.options = new_options
 
@@ -812,13 +883,13 @@ class AirfarePredictionApp():
 
         # Update Origin dropdown to relevant values
         if new == '':
-            new_options = [''] + list(
+            new_options = [''] + sorted(list(
                 self.df['airport_name_concat_1'].unique()
-            )
+            ))
         else:
-            new_options = [''] + list(
+            new_options = [''] + sorted(list(
                 self.df[self.df['airport_name_concat_2'] == new]['airport_name_concat_1'].unique()
-            )
+            ))
 
         self.dropdown_origin.options = new_options
 
@@ -838,11 +909,10 @@ class AirfarePredictionApp():
         """
 
         # Reset prediction
-        self.analysis_results.text="<h2>$   -  </h2>"
+        self._update_analysis_results(0.)
 
         # Update charts
         self._update_histogram()
-        self._update_line_chart()
         self._update_lg_bar_chart()
         self._update_low_bar_chart()
 
@@ -854,7 +924,11 @@ class AirfarePredictionApp():
         """
 
         # Reset prediction
-        self.analysis_results.text="<h2>$   -  </h2>"
+        self._update_analysis_results(0.)
+
+        # Trigger update to line-chart to remove Prophet results
+        self.prophet_df = None
+        self._update_line_chart()
         
         return None
 
@@ -868,53 +942,68 @@ class AirfarePredictionApp():
         destination = self.dropdown_destination.value # returns "airport_name_concat_2"
         season = self.dropdown_season.value           # returns "season"
 
-        # Use the existing function to filter the dataset
-        filtered_data = self._get_filtered_data()    
-        
-        # If no data is found, handle appropriately (e.g., return a default value)
-        if filtered_data.empty:
-            estimated_price = 0.0
-        else:
-            # Apply feature engineering to the filtered dataframe
-            engineered_data = self.feature_engineering(filtered_data)
-            
-            # Select a record (or aggregate as needed) for prediction
-            input_data = engineered_data.iloc[[0]]
+        # XGBoost / CatBoost
+        if self.dropdown_ml_model.value in ('XGBoost', 'CatBoost'):
 
-            # Override the 'year' column with the current year
-            input_data.loc[:, 'year'] = datetime.datetime.now().year
-          
-            # Ensure the input DataFrame has only the features the model expects
-            usable_features = [
-                'year', 'quarter', 'season', 
-                'airport_iata_1', 'airport_iata_2',
-                'state_1', 'state_2',
-                'latitude_1', 'longitude_1',
-                'latitude_2', 'longitude_2',
-                'nsmiles',
-                'lat_diff', 'lon_diff', 'same_state', 'route', 'distance_bin'
-            ]
-            input_data = input_data[usable_features]
+            # Use the existing function to filter the dataset
+            filtered_data = self._get_filtered_data(filter_season=False)
             
-            # Choose model based on dropdown selection
-            model_choice = self.dropdown_ml_model.value
-            if model_choice == 'XGBoost':
-                estimated_price = self.xgb_model.predict(input_data)[0]
-            elif model_choice == 'CatBoost':
-                estimated_price = self.catboost_model.predict(input_data)[0]
-            else:
+            # If no data is found, handle appropriately (e.g., return a default value)
+            if filtered_data.empty:
                 estimated_price = 0.0
+                
+            else:
+                # Apply feature engineering to the filtered dataframe
+                engineered_data = self.feature_engineering(filtered_data)
+                
+                # Select a record (or aggregate as needed) for prediction
+                input_data = engineered_data.iloc[[0]]
+
+                # Override the 'year' column with the current year
+                input_data.loc[:, 'year'] = datetime.datetime.now().year
+            
+                # Ensure the input DataFrame has only the features the model expects
+                usable_features = [
+                    'year', 'quarter', 'season', 
+                    'airport_iata_1', 'airport_iata_2',
+                    'state_1', 'state_2',
+                    'latitude_1', 'longitude_1',
+                    'latitude_2', 'longitude_2',
+                    'nsmiles',
+                    'lat_diff', 'lon_diff', 'same_state', 'route', 'distance_bin'
+                ]
+                input_data = input_data[usable_features]
+                
+                # Choose model based on dropdown selection
+                model_choice = self.dropdown_ml_model.value
+                if model_choice == 'XGBoost':
+                    estimated_price = self.xgb_model.predict(input_data)[0]
+                elif model_choice == 'CatBoost':
+                    estimated_price = self.catboost_model.predict(input_data)[0]
+                else:
+                    estimated_price = 0.0
+
+            # Update analysis results
+            self._update_analysis_results(estimated_price)
+
 
         # FB Prophet Time Series Forecasting
-        if self.dropdown_ml_model.value == 'FB Prophet':
+        elif self.dropdown_ml_model.value == 'FB Prophet':
+
+            # Zero out old predictions, if needed
+            self._update_analysis_results(0.)
+
             # Check for Valid Inputs (note Prophet analysis only needs origin and destination input)
             if (origin == '') or (destination == ''):
                 print('Please select valid Origin and Destination from dropdown.')
                 return None
+            
             else:
+
                 src, dst = origin.split()[0], destination.split()[0] # get 3 letter code
                 mask = (self.df.airport_iata_1 == src) & (self.df.airport_iata_2 == dst)
                 ts_df = self.df[self.ts_cols][mask].copy(deep=True) # filter to route data and desired cols
+
                 # Check if Data has 'year' ending in 2024
                 if ts_df['year'].max() != 2024:
                     print('Selected route ineligible for FB Prophet forecasting.')
@@ -922,23 +1011,28 @@ class AirfarePredictionApp():
                     return None
                 ts_df['date'] = ts_df['year'].astype(str) \
                     .str.cat(ts_df['quarter'].astype(str), sep='-Q')  # example output '2024-Q1'
+                
                 # Check if Data needs to be Aggregated for Codes that have Multiple Airports
                 if {src, dst}.intersection(self.multi_airport_codes): # if non-empty set intersection
                     ts_df = ts_df.groupby(['date'], as_index=False, sort=False).agg({'fare': 'mean'})
                 ts_df = ts_df.sort_values(by='date').reset_index(drop=True)
+
                 # Extract the Longest Nonbreaking Sequence of Quarterly Dates
                 ts_df = find_longest_timeseq(data=ts_df, ycol='fare', min_rows=50) # returns DF or None
+
                 # Check if Data has at least 50 rows for Forecasting
                 if ts_df is None:
                     print('Selected route ineligible for FB Prophet forecasting.')
                     print('Please select a different route.')
                     return None
+                
                 # Use Prophet to make Predictions 8 Qtrs Ahead from 2024-Q1 to 2026-Q1
                 m = Prophet(seasonality_mode='multiplicative', yearly_seasonality=2)
                 fcst_df = fbp_predict_future(model=m, data=ts_df, n=8)
                 self.prophet_df = pd.concat([ts_df,
                                             fcst_df[['ds', 'yhat']].rename(columns={'yhat': 'y'})],
                                             ignore_index=True) # append fcst_df to ts_df
+                
                 # Example Matplotlib Plot
                 # self.prophet_df.plot.line(x='ds', y='y', color='blue',
                 #                             title='FB Prophet Forecasting',
@@ -949,11 +1043,11 @@ class AirfarePredictionApp():
                 # print(self.prophet_df)
                 # plt.show()
 
-        # Update analysis charts
-        # ...
+            # Update analysis charts
+            self._update_line_chart()
 
-        # Update analysis results
-        self._update_analysis_results(estimated_price)
+        else:
+            print('Error')
 
         return None
 
@@ -986,7 +1080,7 @@ class AirfarePredictionApp():
             styles=Styles(text_align='center', justify_content='center')
         )
 
-        analyze_button = Button(label='Analyze', height=35, width=200, margin=(0, 200, 0, 20), align='end')
+        analyze_button = Button(label='Analyze', height=35, width=100, margin=(0, 280, 0, 20), align='end')
         analyze_button.on_click(self._handle_analyze_button_click)
         analyzer_io = row(
             self.dropdown_ml_model, 
