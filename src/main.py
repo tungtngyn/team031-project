@@ -201,7 +201,7 @@ class AirfarePredictionApp():
             ]
 
         if filter_season:
-            if self.dropdown_season.value != '' and self.dropdown_season != 'All':
+            if self.dropdown_season.value != '':
                 filtered_df = filtered_df[
                     filtered_df['season'] == self.dropdown_season.value
                 ]
@@ -479,7 +479,7 @@ class AirfarePredictionApp():
             alpha = 0.8
 
         # Get filtered data
-        filtered_df = self._get_filtered_data()
+        filtered_df = self._get_filtered_data(filter_season=True)
 
         # Calculate histogram
         bins = np.arange(filtered_df["fare"].min(), filtered_df["fare"].max() + 20, 20)
@@ -546,7 +546,7 @@ class AirfarePredictionApp():
             alpha = 0.8
 
         # Get filtered data
-        filtered_df = self._get_filtered_data(filter_season=False)
+        filtered_df = self._get_filtered_data()
         filtered_df['date'] = pd.to_datetime(
             filtered_df['year'].astype(str) 
             + '-' 
@@ -783,14 +783,21 @@ class AirfarePredictionApp():
             alpha = 0.8
 
         # Get filtered data
-        filtered_df = self._get_filtered_data()
+        filtered_df = self._get_filtered_data(filter_season=True)
 
         # Aggregate
         col = 'fare_lg' if carrier_type == 'lg' else 'fare_low'
         name_col = 'carrier_lg_name_concat' if carrier_type == 'lg' else 'carrier_low_name_concat'
         
-        avg_data = filtered_df.groupby(name_col).agg(avg_fare=(col, "mean")).reset_index()
-        avg_data = avg_data.sort_values("avg_fare", ascending=False)[:10].reset_index(drop=True)
+        avg_data = (
+            filtered_df
+                .groupby(name_col)
+                .agg(avg_fare=(col, "mean"))
+                .reset_index()
+                .sort_values("avg_fare", ascending=False)[:10]
+                .reset_index(drop=True)
+        )
+        avg_data = avg_data[avg_data['avg_fare'] > 0]
 
         # Update limits based on values
         self.bar_chart_xlim[carrier_type] = Range1d(0, avg_data['avg_fare'].max() + 20)
@@ -814,7 +821,7 @@ class AirfarePredictionApp():
     def _initialize_lg_bar_chart(self) -> None:
         """Function to initialize the "lg" carrier bar chart.
         """
-        self.hv_lg_bar_chart = hv.DynamicMap(partial(self._redraw_holoviews_bar_chart, carrier_type='lg'), streams=[UpdateStream()])
+        self.hv_lg_bar_chart = self._redraw_holoviews_bar_chart(carrier_type='lg') # Initial chart
         self.bk_lg_bar_chart = hv.render(self.hv_lg_bar_chart)
         self.bk_lg_bar_chart.toolbar.logo = None
         return None
@@ -823,7 +830,10 @@ class AirfarePredictionApp():
     def _update_lg_bar_chart(self) -> None:
         """Updates the "lg" carrier bar chart when new options are selected.
         """
-        self.hv_lg_bar_chart.event() # Trigger a redraw, recalculate ylim
+        bars = self._redraw_holoviews_bar_chart(carrier_type='lg')
+        redrawn_plot = hv.render(bars)
+        self.bk_bar_layout.children[0] = redrawn_plot # force a full redraw to avoid missing elements
+
         self.bk_lg_bar_chart.x_range = self.bar_chart_xlim['lg']
         self.bk_lg_bar_chart.y_range = self.bar_chart_ylim['lg']
         return None
@@ -832,7 +842,7 @@ class AirfarePredictionApp():
     def _initialize_low_bar_chart(self) -> None:
         """Function to initialize the "low" carrier bar chart.
         """
-        self.hv_low_bar_chart = hv.DynamicMap(partial(self._redraw_holoviews_bar_chart, carrier_type='low'), streams=[UpdateStream()])
+        self.hv_low_bar_chart = self._redraw_holoviews_bar_chart(carrier_type='low') # Initial chart
         self.bk_low_bar_chart = hv.render(self.hv_low_bar_chart)
         self.bk_low_bar_chart.toolbar.logo = None
         return None
@@ -841,7 +851,10 @@ class AirfarePredictionApp():
     def _update_low_bar_chart(self) -> None:
         """Updates the "low" carrier bar chart when new options are selected.
         """
-        self.hv_low_bar_chart.event() # Trigger a redraw, recalculate ylim
+        bars = self._redraw_holoviews_bar_chart(carrier_type='low')
+        redrawn_plot = hv.render(bars)
+        self.bk_bar_layout.children[1] = redrawn_plot # force a full redraw to avoid missing elements
+
         self.bk_low_bar_chart.x_range = self.bar_chart_xlim['low']
         self.bk_low_bar_chart.y_range = self.bar_chart_ylim['low']
         return None
@@ -946,7 +959,7 @@ class AirfarePredictionApp():
         if self.dropdown_ml_model.value in ('XGBoost', 'CatBoost'):
 
             # Use the existing function to filter the dataset
-            filtered_data = self._get_filtered_data(filter_season=False)
+            filtered_data = self._get_filtered_data()
             
             # If no data is found, handle appropriately (e.g., return a default value)
             if filtered_data.empty:
@@ -1122,5 +1135,7 @@ class AirfarePredictionApp():
             ],
             sizing_mode='scale_width'
         )
+
+        self.bk_bar_layout = t2
 
         return layout
