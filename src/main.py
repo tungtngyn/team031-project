@@ -58,6 +58,15 @@ class AirfarePredictionApp():
         # Load the saved CatBoost model pipeline
         self.catboost_model = joblib.load(r'./dev/models/catboost_airfare_model.pkl')               
 
+        # ~ load saved Decision Tree
+        self.decision_tree_model = joblib.load(r'./dev/models/best_decision_tree_regressor.pkl')
+
+        # ~ load saved Random Forest
+        self.random_forest_model = joblib.load(r'./dev/models/best_random_forest_regressor.pkl')
+
+        # ~ load saved Decision Tree & Random Forest model columns
+        self.decision_forest_model_columns = joblib.load(r'./dev/models/decision_and_forest_model_columns.pkl')
+
         # Load CSS
         with open(r'./src/styles.css') as f:
             self.css = f.read()
@@ -1058,6 +1067,52 @@ class AirfarePredictionApp():
 
             # Update analysis charts
             self._update_line_chart()
+
+        # Decision Tree & Random Forest
+        elif self.dropdown_ml_model.value in ('Decision Tree', 'Random Forest'):
+
+            # Check for Valid Inputs
+            if (origin == '') or (destination == '') or (season == ''):
+                print('Please select valid Origin and Destination and Season from dropdown.')
+                return None
+
+
+            # transform user-input into model-appropriate-input
+            data = {
+                'airport_name_concat_1': [origin],
+                'airport_name_concat_2': [destination],
+                'season': [season]
+            }
+            input_df = pd.DataFrame(data)
+            # One-hot encode with the same prefix used during training
+            input_df_encoded = pd.get_dummies(input_df,
+                                              columns=['airport_name_concat_1', 'airport_name_concat_2', 'season'],
+                                              prefix=['airport_name_concat_1', 'airport_name_concat_2', 'season'])
+
+            # Dictionary to hold the missing columns with default values of 0
+            missing_cols = {col: [0] * len(input_df_encoded) for col in self.decision_forest_model_columns if
+                            col not in input_df_encoded.columns}
+
+            # Convert the dictionary to a DataFrame and concatenate it to the existing DataFrame
+            missing_df = pd.DataFrame(missing_cols)
+            input_df_encoded = pd.concat([input_df_encoded, missing_df], axis=1)
+
+            # Ensure the order of columns matches the training data
+            input_df_encoded = input_df_encoded[self.decision_forest_model_columns]
+
+
+            # Prediction
+            model_choice = self.dropdown_ml_model.value
+            if model_choice == 'Decision Tree':
+                prediction = self.decision_tree_model.predict(input_df_encoded)[0]
+
+            elif model_choice == 'Random Forest':
+                prediction = self.random_forest_model.predict(input_df_encoded)[0]
+            else:
+                prediction = 0.0
+
+            # Update analysis results
+            self._update_analysis_results(prediction)
 
         else:
             print('Error')
