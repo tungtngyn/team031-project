@@ -9,7 +9,7 @@ if TYPE_CHECKING:
 
 import pandas as pd
 import numpy as np
-from functools import partial
+
 from bokeh.plotting import figure
 from bokeh.layouts import column, row
 from bokeh.models import (
@@ -22,7 +22,7 @@ from bokeh.sampledata.us_states import data as states
 from bokeh.palettes import RdYlGn6 as palette
 
 from prophet import Prophet
-from dev.fbp_tsa import (
+from src.fbp_tsa import (
     find_longest_timeseq, fbp_predict_future
 ) # import custom user functions
 import matplotlib.pyplot as plt
@@ -53,19 +53,19 @@ class AirfarePredictionApp():
         self.df = pd.read_csv(r'./data/processed-data.csv')
 
         # Load the saved XGBoost model pipeline
-        self.xgb_model = joblib.load(r'./dev/models/xgb_airfare_model.pkl')
+        self.xgb_model = joblib.load(r'./models/xgb_airfare_model.pkl')
 
         # Load the saved CatBoost model pipeline
-        self.catboost_model = joblib.load(r'./dev/models/catboost_airfare_model.pkl')               
+        self.catboost_model = joblib.load(r'./models/catboost_airfare_model.pkl')               
 
         # ~ load saved Decision Tree
-        self.decision_tree_model = joblib.load(r'./dev/models/best_decision_tree_regressor.pkl')
+        self.decision_tree_model = joblib.load(r'./models/best_decision_tree_regressor.pkl')
 
         # ~ load saved Random Forest
-        self.random_forest_model = joblib.load(r'./dev/models/best_random_forest_regressor.pkl')
+        self.random_forest_model = joblib.load(r'./models/best_random_forest_regressor.pkl')
 
         # ~ load saved Decision Tree & Random Forest model columns
-        self.decision_forest_model_columns = joblib.load(r'./dev/models/decision_and_forest_model_columns.pkl')
+        self.decision_forest_model_columns = joblib.load(r'./models/decision_and_forest_model_columns.pkl')
 
         # Load CSS
         with open(r'./src/styles.css') as f:
