@@ -6,7 +6,7 @@ if TYPE_CHECKING:
     from bokeh.models.plots import GridPlot
     from bokeh.events import ButtonClick
 
-
+import json
 import pandas as pd
 import numpy as np
 
@@ -20,12 +20,6 @@ from bokeh.models import (
 from bokeh.models.css import Styles
 from bokeh.sampledata.us_states import data as states
 from bokeh.palettes import RdYlGn6 as palette
-
-from prophet import Prophet
-from src.fbp_tsa import (
-    find_longest_timeseq, fbp_predict_future
-) # import custom user functions
-import matplotlib.pyplot as plt
 
 import holoviews as hv
 from holoviews.streams import Stream
@@ -66,6 +60,20 @@ class AirfarePredictionApp():
 
         # ~ load saved Decision Tree & Random Forest model columns
         self.decision_forest_model_columns = joblib.load(r'./models/decision_and_forest_model_columns.pkl')
+
+        # Load Prophet Forecast DataFrames from JSON (dict of pd.Dataframe.to_dict(orient='records'))
+        with open(r'./models/prophet_model_fare_forecast.json', 'r') as file_in:
+            self.prophet_fare_dfs = json.load(file_in)
+        with open(r'./models/prophet_model_farelg_forecast.json', 'r') as file_in:
+            self.prophet_farelg_dfs = json.load(file_in)
+        with open(r'./models/prophet_model_farelow_forecast.json', 'r') as file_in:
+            self.prophet_farelow_dfs = json.load(file_in)
+
+        # Load Prophet Forecast DataFrames (where routes had IATA code remapped)
+        # note: after preprocessing data, no valid routes needed remapping, hence empty dicts below
+        self.prophet_fare_dfs2 = {}
+        self.prophet_farelg_dfs2 = {}
+        self.prophet_farelow_dfs2 = {}
 
         # Load CSS
         with open(r'./src/styles.css') as f:
@@ -147,7 +155,7 @@ class AirfarePredictionApp():
         # Misc variables
         self.EXCLUDED = ('HI', 'AK') # Excluded states
         self.multi_airport_codes = {'ACY', 'ORD', 'DTW', 'LGA', 'IAD', 'EGE'} # IATA codes with multiple airports after remapping
-        self.ts_cols = ['year', 'quarter', 'airport_iata_1', 'airport_iata_2', 'fare'] # time series columns
+        self.ts_cols = ['year', 'quarter', 'fare', 'fare_lg', 'fare_low'] # time series columns
 
         # Calculate coordinates for all airports in dataset
         self.airport_coords = {
@@ -173,8 +181,10 @@ class AirfarePredictionApp():
         self.bar_chart_xlim = {}
         self.bar_chart_ylim = {}
 
-        # Analysis Model
-        self.prophet_df = None  # store Prophet pd.DataFrame
+        # Prophet Time Series Analysis Plotting
+        self.prophet_fare_df = None  # store Prophet pd.DataFrame (history + forecast) to plot
+        self.prophet_fare_lg_df = None
+        self.prophet_fare_low_df = None
 
         return None
 
@@ -556,15 +566,12 @@ class AirfarePredictionApp():
 
         # Get filtered data
         filtered_df = self._get_filtered_data()
-        filtered_df['date'] = pd.to_datetime(
+        filtered_df['date'] = pd.PeriodIndex(
             filtered_df['year'].astype(str) 
-            + '-' 
-            + filtered_df['quarter']
-                .map({1: 2, 2: 5, 3: 8, 4: 11}) # Quarter -> Month
-                .astype(str)
-                .str
-                .zfill(2)
-        )
+            + '-Q' 
+            + filtered_df['quarter'].astype(str)
+            , freq='Q'
+        ).to_timestamp(freq='Q')
 
         # Aggregate
         avg_fare_by_year = filtered_df.groupby("date").agg(
@@ -575,7 +582,13 @@ class AirfarePredictionApp():
         
         # Update limits based on values
         self.line_chart_xlim = Range1d(filtered_df['date'].min(), filtered_df['date'].max())
-        self.line_chart_ylim = Range1d(0, avg_fare_by_year['avg_fare'].max() + 20)
+        self.line_chart_ylim = Range1d(
+            0, 
+            max(
+                avg_fare_by_year['avg_fare_lg'].max(), 
+                avg_fare_by_year['avg_fare'].max()
+            ) + 20
+        )
 
         # Line charts
         avg_fare_line = hv.Curve(
@@ -620,33 +633,34 @@ class AirfarePredictionApp():
         )
 
         # Plot prophet if results present
-        if type(self.prophet_df) == pd.DataFrame:
+        if type(self.prophet_fare_df) == pd.DataFrame:
 
             # Get max historical date
             max_date = filtered_df['date'].max()
             
             # Update limits based on Prophet values
-            self.line_chart_xlim = Range1d(filtered_df['date'].min(), self.prophet_df['ds'].max())
+            self.line_chart_xlim = Range1d(filtered_df['date'].min(), self.prophet_fare_df['ds'].max())
             self.line_chart_ylim = Range1d(
                 0, 
                 max(
+                    avg_fare_by_year['avg_fare_lg'].max(), 
                     avg_fare_by_year['avg_fare'].max(), 
-                    self.prophet_df['y'].max()
+                    self.prophet_fare_lg_df['y'].max()
                 ) + 20
             )
             
-            filtered_prophet_df = (
-                self.prophet_df[self.prophet_df.ds > max_date]
+            filtered_prophet_fare_df = (
+                self.prophet_fare_df[self.prophet_fare_df.ds >= max_date]
                     .rename(columns={'ds': 'date', 'y': 'avg_fare'})
                     .copy(deep=True)
                     .reset_index(drop=True)
             )
 
             avg_fare_prophet = hv.Curve(
-                filtered_prophet_df, 
+                filtered_prophet_fare_df, 
                 "date", 
                 "avg_fare", 
-                label="Avg Fare (Forecast)"
+                label="Prophet (Forecast)"
             ).opts(
                 line_color="red", 
                 line_width=2, 
@@ -655,7 +669,49 @@ class AirfarePredictionApp():
                 hover_tooltips=hover_tooltips
             )
 
-            return (avg_fare_line * avg_fare_lg_line * avg_fare_low_line * avg_fare_prophet).opts(
+            filtered_prophet_fare_lg_df = (
+                self.prophet_fare_lg_df[self.prophet_fare_lg_df.ds >= max_date]
+                    .rename(columns={'ds': 'date', 'y': 'avg_fare_lg'})
+                    .copy(deep=True)
+                    .reset_index(drop=True)
+            )
+
+            avg_fare_lg_prophet = hv.Curve(
+                filtered_prophet_fare_lg_df, 
+                "date", 
+                "avg_fare_lg", 
+                label=""
+            ).opts(
+                line_color="#FF9195", 
+                line_width=2, 
+                line_dash="dashed", 
+                tools=["hover"], 
+                alpha=alpha, 
+                hover_tooltips=hover_tooltips
+            )
+
+            filtered_prophet_fare_low_df = (
+                self.prophet_fare_low_df[self.prophet_fare_low_df.ds >= max_date]
+                    .rename(columns={'ds': 'date', 'y': 'avg_fare_low'})
+                    .copy(deep=True)
+                    .reset_index(drop=True)
+            )
+
+            avg_fare_low_prophet = hv.Curve(
+                filtered_prophet_fare_low_df, 
+                "date", 
+                "avg_fare_low", 
+                label=""
+            ).opts(
+                line_color="#FF474D", 
+                line_width=2, 
+                line_dash="dotted", 
+                tools=["hover"], 
+                alpha=alpha, 
+                hover_tooltips=hover_tooltips
+            )
+
+            return (avg_fare_line * avg_fare_lg_line * avg_fare_low_line * avg_fare_prophet * avg_fare_lg_prophet * avg_fare_low_prophet).opts(
                 xlabel="Date", 
                 ylabel="Average Fare",
                 title=f"Average Fares Over Time",
@@ -891,6 +947,9 @@ class AirfarePredictionApp():
         # Update charts
         self._update_choropleth()
         self._update_histogram()
+        self.prophet_fare_df = None # remove Prophet results before triggering line chart redraw
+        self.prophet_fare_lg_df = None
+        self.prophet_fare_low_df = None
         self._update_line_chart()
         self._update_seasonal_boxplot()
         self._update_lg_bar_chart()
@@ -918,6 +977,9 @@ class AirfarePredictionApp():
         # Update charts
         self._update_choropleth()
         self._update_histogram()
+        self.prophet_fare_df = None # remove Prophet results before triggering line chart redraw
+        self.prophet_fare_lg_df = None
+        self.prophet_fare_low_df = None
         self._update_line_chart()
         self._update_seasonal_boxplot()
         self._update_lg_bar_chart()
@@ -949,9 +1011,11 @@ class AirfarePredictionApp():
         self._update_analysis_results(0.)
 
         # Trigger update to line-chart to remove Prophet results
-        self.prophet_df = None
+        self.prophet_fare_df = None
+        self.prophet_fare_lg_df = None
+        self.prophet_fare_low_df = None
         self._update_line_chart()
-        
+
         return None
 
 
@@ -969,21 +1033,21 @@ class AirfarePredictionApp():
 
             # Use the existing function to filter the dataset
             filtered_data = self._get_filtered_data()
-            
+
             # If no data is found, handle appropriately (e.g., return a default value)
             if filtered_data.empty:
                 estimated_price = 0.0
-                
+
             else:
                 # Apply feature engineering to the filtered dataframe
                 engineered_data = self.feature_engineering(filtered_data)
-                
+
                 # Select a record (or aggregate as needed) for prediction
                 input_data = engineered_data.iloc[[0]]
 
                 # Override the 'year' column with the current year
                 input_data.loc[:, 'year'] = datetime.datetime.now().year
-            
+
                 # Ensure the input DataFrame has only the features the model expects
                 usable_features = [
                     'year', 'quarter', 'season', 
@@ -995,7 +1059,7 @@ class AirfarePredictionApp():
                     'lat_diff', 'lon_diff', 'same_state', 'route', 'distance_bin'
                 ]
                 input_data = input_data[usable_features]
-                
+
                 # Choose model based on dropdown selection
                 model_choice = self.dropdown_ml_model.value
                 if model_choice == 'XGBoost':
@@ -1019,12 +1083,13 @@ class AirfarePredictionApp():
             if (origin == '') or (destination == ''):
                 print('Please select valid Origin and Destination from dropdown.')
                 return None
-            
+
             else:
 
                 src, dst = origin.split()[0], destination.split()[0] # get 3 letter code
-                mask = (self.df.airport_iata_1 == src) & (self.df.airport_iata_2 == dst)
-                ts_df = self.df[self.ts_cols][mask].copy(deep=True) # filter to route data and desired cols
+                route = f'{src}-{dst}'                               # example 'SFO-SAN'
+                ts_df = self._get_filtered_data(filter_season=False) # filter to route data ignoring season
+                ts_df = ts_df[self.ts_cols]                          # filter to desired cols
 
                 # Check if Data has 'year' ending in 2024
                 if ts_df['year'].max() != 2024:
@@ -1032,38 +1097,68 @@ class AirfarePredictionApp():
                     print('Please select a different route.')
                     return None
                 ts_df['date'] = ts_df['year'].astype(str) \
-                    .str.cat(ts_df['quarter'].astype(str), sep='-Q')  # example output '2024-Q1'
-                
+                    .str.cat(ts_df['quarter'].astype(str), sep='-Q')      # example output '2024-Q1'
+                ts_df['date'] = pd.PeriodIndex(ts_df['date'], freq='Q') \
+                    .to_timestamp(freq='Q')                               # example output '2024-03-31'
+
                 # Check if Data needs to be Aggregated for Codes that have Multiple Airports
                 if {src, dst}.intersection(self.multi_airport_codes): # if non-empty set intersection
-                    ts_df = ts_df.groupby(['date'], as_index=False, sort=False).agg({'fare': 'mean'})
-                ts_df = ts_df.sort_values(by='date').reset_index(drop=True)
+                    ts_df = ts_df.groupby(['date'], as_index=False, sort=True) \
+                        .agg({'fare': 'mean', 'fare_lg': 'mean', 'fare_low': 'mean'})
+                    fcst = self.prophet_fare_dfs2.get(route, None) # check if route is valid, returns dict
+                    fcst_lg = self.prophet_farelg_dfs2.get(route, None)
+                    fcst_low = self.prophet_farelow_dfs2.get(route, None)
+                else:
+                    ts_df = ts_df.sort_values(by='date').reset_index(drop=True)
+                    fcst = self.prophet_fare_dfs.get(route, None)  # check if route is valid, returns dict
+                    fcst_lg = self.prophet_farelg_dfs.get(route, None)
+                    fcst_low = self.prophet_farelow_dfs.get(route, None)
 
-                # Extract the Longest Nonbreaking Sequence of Quarterly Dates
-                ts_df = find_longest_timeseq(data=ts_df, ycol='fare', min_rows=50) # returns DF or None
-
-                # Check if Data has at least 50 rows for Forecasting
-                if ts_df is None:
+                # Check if Time Series Data was Eligible for Forecasting (min 50 nonbreaking sequential rows)
+                if fcst is None:
                     print('Selected route ineligible for FB Prophet forecasting.')
                     print('Please select a different route.')
                     return None
-                
-                # Use Prophet to make Predictions 8 Qtrs Ahead from 2024-Q1 to 2026-Q1
-                m = Prophet(seasonality_mode='multiplicative', yearly_seasonality=2)
-                fcst_df = fbp_predict_future(model=m, data=ts_df, n=8)
-                self.prophet_df = pd.concat([ts_df,
-                                            fcst_df[['ds', 'yhat']].rename(columns={'yhat': 'y'})],
-                                            ignore_index=True) # append fcst_df to ts_df
-                
-                # Example Matplotlib Plot
-                # self.prophet_df.plot.line(x='ds', y='y', color='blue',
-                #                             title='FB Prophet Forecasting',
-                #                             xlabel='Date', ylabel='Fare',
-                #                             linestyle='-', linewidth=1,
-                #                             marker='o',
-                #                             label=f'{src}-{dst}')
-                # print(self.prophet_df)
-                # plt.show()
+
+                # Prophet Forecasts are 8 Qtrs Ahead from 2024-Q1 to 2026-Q1
+                fcst_df, fcst_lg_df, fcst_low_df = pd.DataFrame(fcst), pd.DataFrame(fcst_lg), pd.DataFrame(fcst_low)
+                fcst_df['ds'], fcst_df['yhat'] = pd.to_datetime(fcst_df['ds']), fcst_df['yhat'].astype(float)
+                fcst_lg_df['ds'], fcst_lg_df['yhat'] = pd.to_datetime(fcst_lg_df['ds']), fcst_lg_df['yhat'].astype(float)
+                fcst_low_df['ds'], fcst_low_df['yhat'] = pd.to_datetime(fcst_low_df['ds']), fcst_low_df['yhat'].astype(float)
+
+                self.prophet_fare_df = pd.concat(
+                    [
+                        ts_df[['date', 'fare']].rename(columns={'date': 'ds', 'fare': 'y'}),
+                        fcst_df[['ds', 'yhat']].rename(columns={'yhat': 'y'})
+                    ],
+                    ignore_index=True
+                ) # append fcst_df to ts_df
+                self.prophet_fare_lg_df = pd.concat(
+                    [
+                        ts_df[['date', 'fare_lg']].rename(columns={'date': 'ds', 'fare_lg': 'y'}),
+                        fcst_lg_df[['ds', 'yhat']].rename(columns={'yhat': 'y'})
+                    ],
+                    ignore_index=True
+                ) # append fcst_df to ts_df
+                self.prophet_fare_low_df = pd.concat(
+                    [
+                        ts_df[['date', 'fare_low']].rename(columns={'date': 'ds', 'fare_low': 'y'}),
+                        fcst_low_df[['ds', 'yhat']].rename(columns={'yhat': 'y'})
+                    ],
+                    ignore_index=True
+                ) # append fcst_df to ts_df
+
+                # # Test Output
+                # print(
+                #     pd.concat(
+                #         [
+                #             self.prophet_fare_low_df.tail(10).rename(columns={'y': 'fare_low'}),
+                #             self.prophet_fare_df[['y']].tail(10).rename(columns={'y': 'fare'}),
+                #             self.prophet_fare_lg_df[['y']].tail(10).rename(columns={'y': 'fare_lg'})
+                #         ],
+                #         axis=1
+                #     )
+                # )
 
             # Update analysis charts
             self._update_line_chart()
