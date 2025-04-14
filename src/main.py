@@ -897,6 +897,7 @@ class AirfarePredictionApp():
         """
         bars = self._redraw_holoviews_bar_chart(carrier_type='lg')
         redrawn_plot = hv.render(bars)
+        redrawn_plot.toolbar.logo = None
         self.bk_bar_layout.children[0] = redrawn_plot # force a full redraw to avoid missing elements
 
         self.bk_lg_bar_chart.x_range = self.bar_chart_xlim['lg']
@@ -918,6 +919,7 @@ class AirfarePredictionApp():
         """
         bars = self._redraw_holoviews_bar_chart(carrier_type='low')
         redrawn_plot = hv.render(bars)
+        redrawn_plot.toolbar.logo = None
         self.bk_bar_layout.children[1] = redrawn_plot # force a full redraw to avoid missing elements
 
         self.bk_low_bar_chart.x_range = self.bar_chart_xlim['low']
