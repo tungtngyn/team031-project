@@ -323,6 +323,7 @@ if __name__ == "__main__":
 
   cols2keep = ['date', 'route', 'fare', 'fare_lg', 'fare_low']
   data = process_df(data, cols2keep) # clean and process data into better format
+  # data.dropna(inplace=True)
   # print(data.head())
 
   # --------------------------------------------------------------------------------------------- #
@@ -397,46 +398,46 @@ if __name__ == "__main__":
   # NOTE Run either Option A or B below
 
   ## -- Option A -- Train and Predict Future Forecast
-  # Find Route and its Longest Subsequence of Dates with Min Count 50
-  # Note: 10 Busiest airport by passengers are ORD, DFW, BOS, LAX, MDW, ATL, IAH, DEN, LAS, DTW
-  df = filter_routes(data, 'ABQ', 'DAL')  # returns sorted_df of a direct flight
-  df = find_longest_timeseq(df, ycol='fare', min_rows=50)
-  assert endsIn2024(df) == True  # check if DF has ['ds'] that ends in 2024
+  # # Find Route and its Longest Subsequence of Dates with Min Count 50
+  # # Note: 10 Busiest airport by passengers are ORD, DFW, BOS, LAX, MDW, ATL, IAH, DEN, LAS, DTW
+  # df = filter_routes(data, 'ABQ', 'DAL')  # returns sorted_df of a direct flight
+  # df = find_longest_timeseq(df, ycol='fare', min_rows=50)
+  # assert endsIn2024(df) == True  # check if DF has ['ds'] that ends in 2024
 
-  # with pd.option_context('display.max_rows', None, 'display.max_columns', None):
-  #   print(df)
-  # print(df.dtypes)
+  # # with pd.option_context('display.max_rows', None, 'display.max_columns', None):
+  # #   print(df)
+  # # print(df.dtypes)
 
-  # FB Prophet Forecasting
-  m = Prophet(seasonality_mode='multiplicative', yearly_seasonality=2,
-              changepoint_prior_scale=0.1, seasonality_prior_scale=0.1,
-              changepoint_range=0.9
-              )
-  future_forecast = fbp_predict_future(model=m, data=df, n=8, plot_fcst=True, plot_comp=True)  # predict 8 quarters ahead
-  # print(future_forecast[['ds', 'yhat']])
+  # # FB Prophet Forecasting
+  # m = Prophet(seasonality_mode='multiplicative', yearly_seasonality=2,
+  #             changepoint_prior_scale=0.1, seasonality_prior_scale=0.1,
+  #             changepoint_range=0.9
+  #             )
+  # future_forecast = fbp_predict_future(model=m, data=df, n=8, plot_fcst=True, plot_comp=True)  # predict 8 quarters ahead
+  # # print(future_forecast[['ds', 'yhat']])
 
-  ## -- Option B -- Train and Test Split to Find MAPEs
-  df, ignore = train_test_split(df, test_split='2020-03-21')  # split df on COVID
-  train_df, test_df = train_test_split(df, test_split=8)  # test set is last 8 rows
-  # print(train_df, test_df)
-  plot_train_test(train_df, test_df)  # scatterplot
+  # ## -- Option B -- Train and Test Split to Find MAPEs
+  # df, ignore = train_test_split(df, test_split='2020-03-21')  # split df on COVID
+  # train_df, test_df = train_test_split(df, test_split=8)  # test set is last 8 rows
+  # # print(train_df, test_df)
+  # plot_train_test(train_df, test_df)  # scatterplot
 
-  m = Prophet(seasonality_mode='multiplicative', yearly_seasonality=2,
-              changepoint_prior_scale=0.1, seasonality_prior_scale=0.1,
-              changepoint_range=0.9
-              )
-  test_forecast = fbp_predict_test(model=m, train=train_df, test=test_df, plot_act_vs_pred=True)  # make prediction on known data to calc error
+  # m = Prophet(seasonality_mode='multiplicative', yearly_seasonality=2,
+  #             changepoint_prior_scale=0.1, seasonality_prior_scale=0.1,
+  #             changepoint_range=0.9
+  #             )
+  # test_forecast = fbp_predict_test(model=m, train=train_df, test=test_df, plot_act_vs_pred=True)  # make prediction on known data to calc error
 
-  mape = mean_absolute_percentage_error(y_true=test_df['y'], y_pred=test_forecast['yhat'])
-  mae = mean_absolute_error(y_true=test_df['y'], y_pred=test_forecast['yhat'])
-  mse = mean_squared_error(y_true=test_df['y'], y_pred=test_forecast['yhat'])
-  rmse = sqrt(mse)
+  # mape = mean_absolute_percentage_error(y_true=test_df['y'], y_pred=test_forecast['yhat'])
+  # mae = mean_absolute_error(y_true=test_df['y'], y_pred=test_forecast['yhat'])
+  # mse = mean_squared_error(y_true=test_df['y'], y_pred=test_forecast['yhat'])
+  # rmse = sqrt(mse)
 
-  print("\nModel Error:")
-  print(f"Mean Absolute Percentage Error (MAPE): {(mape*100):.2f}%")
-  print(f"Mean Absolute Error (MAE): {mae:.2f}")
-  print(f"Mean Squared Error (MSE): {mse:.2f}")
-  print(f"Root Mean Squared Error (RMSE): {rmse:.2f}")
+  # print("\nModel Error:")
+  # print(f"Mean Absolute Percentage Error (MAPE): {(mape*100):.2f}%")
+  # print(f"Mean Absolute Error (MAE): {mae:.2f}")
+  # print(f"Mean Squared Error (MSE): {mse:.2f}")
+  # print(f"Root Mean Squared Error (RMSE): {rmse:.2f}")
 
   # --------------------------------------------------------------------------------------------- #
   # III.i CROSS VALIDATION WITH PARAMETER GRID SEARCH OPTIMIZATION FOR ALL VALID ROUTES
@@ -484,10 +485,10 @@ if __name__ == "__main__":
   #     print(f'{route}: min CV MAPE {100*best_cv_mapes[route]:.2f}%')  # output to track during optimization
 
   # # Export Best Params and MAPEs as JSON
-  # with open(r'./models/prophet_model_fare_params.json', 'w') as file_out:
+  # with open(r'./models/prophet_params_and_mapes/prophet_model_fare_params.json', 'w') as file_out:
   #   json.dump(best_params, file_out, indent=4)  # best_params is nested dict
 
-  # with open(r'./models/prophet_model_fare_mapes.json', 'w') as file_out:
+  # with open(r'./models/prophet_params_and_mapes/prophet_model_fare_mapes.json', 'w') as file_out:
   #   json.dump(best_cv_mapes, file_out, indent=4)  # best_mapes is dict
 
   # --------------------------------------------------------------------------------------------- #
@@ -497,8 +498,8 @@ if __name__ == "__main__":
   # NOTE: run this after CV parameter grid search optimization
 
   # # Import Best Params
-  # with open(r'./models/prophet_model_fare_params_preCOVID.json', 'r') as file_in:
-  #   best_params = json.load(file_in)  # best_params is nested dict
+  with open(r'./models/prophet_params_and_mapes/prophet_model_fare_params_preCOVID.json', 'r') as file_in:
+    best_params = json.load(file_in)  # best_params is nested dict
 
   # # NOTE Run either Option A or B below
 
@@ -569,28 +570,33 @@ if __name__ == "__main__":
   #   json.dump(remapped, file_out, indent=4)  # dict of list of dicts or empty dict
 
   ## -- Option B -- Train and Test Split to Find MAPEs
-  # # Find all Unique Routes
-  # unique_routes = sorted(set(data['route']))  # ['ABE-CHI', 'ABE-MCO', ...]
+  # Find all Unique Routes
+  unique_routes = sorted(set(data['route']))  # ['ABE-CHI', 'ABE-MCO', ...]
 
-  # mape_dict = {}  # empty dict to store mape from Prophet predictions on Train-Test Split
+  mape_dict = {}  # empty dict to store mape from Prophet predictions on Train-Test Split
 
-  # # Loop through all 4069 unique routes
-  # for route in unique_routes:
-  #   src, dst = route.split('-')
-  #   filtered_df = filter_routes(data, air1=src, air2=dst, min_rows=50)  # return DF or None
-  #   if filtered_df is None:
-  #     continue
-  #   df = find_longest_timeseq(data=filtered_df, ycol='fare', min_rows=50)  # return DF or None
-  #   if (df is not None) and endsIn2024(df):
-  #     # df, ignore = train_test_split(df, test_split='2020-03-21')  # split df on COVID
-  #     train_df, test_df = train_test_split(df, test_split=8)  # test set is last 8 rows
-  #     m = Prophet(yearly_seasonality=2, **params)  # instantiate prophet model
-  #     test_fcst = fbp_predict_test(model=m, train=train_df, test=test_df)  # make forecasts
-  #     mape = mean_absolute_percentage_error(y_true=test_df['y'], y_pred=test_fcst['yhat'])
-  #     mape_dict[route] = mape  # store into dict
-  #     print(f'MAPE: {mape*100:.2f}% ({route})')
+  # Loop through all 4069 unique routes
+  for route in unique_routes:
+    src, dst = route.split('-')
+    filtered_df = filter_routes(data, air1=src, air2=dst, min_rows=50)  # return DF or None
+    if filtered_df is None:
+      continue
+    df = find_longest_timeseq(data=filtered_df, ycol='fare', min_rows=50)  # return DF or None
+    if (df is not None) and endsIn2024(df):
+      df, ignore = train_test_split(df, test_split='2020-03-21')  # split df on COVID
+      train_df, test_df = train_test_split(df, test_split=8)  # test set is last 8 rows
+      m = Prophet(yearly_seasonality=2, **best_params[route])  # instantiate prophet model
+      test_fcst = fbp_predict_test(model=m, train=train_df, test=test_df)  # make forecasts
+      mape = mean_absolute_percentage_error(y_true=test_df['y'], y_pred=test_fcst['yhat'])
+      mape_dict[route] = mape  # store into dict
+      # print(f'MAPE: {mape*100:.2f}% ({route})')
 
-  # print("\nModel Error for All Unique Routes:")
-  # print(f"min MAPE: {min(mape_dict.values())*100:.2f}% ({min(mape_dict, key=mape_dict.get)})")
-  # print(f"max MAPE: {max(mape_dict.values())*100:.2f}% ({max(mape_dict, key=mape_dict.get)})")
-  # print(f"avg MAPE: {sum(mape_dict.values())/len(mape_dict)*100:.2f}%")
+  print("\nModel Error for All Valid Unique Routes:")
+  print(f"min MAPE: {min(mape_dict.values())*100:.2f}% ({min(mape_dict, key=mape_dict.get)})")
+  print(f"max MAPE: {max(mape_dict.values())*100:.2f}% ({max(mape_dict, key=mape_dict.get)})")
+  print(f"avg MAPE: {sum(mape_dict.values())/len(mape_dict)*100:.2f}%")
+
+  ## OUTPUT using df = find_longest_timeseq(..., ycol='fare', ...)
+  # min MAPE: 1.11% (HPN-MCO)
+  # max MAPE: 110.87% (MDW-CVG)
+  # avg MAPE: 10.43%
