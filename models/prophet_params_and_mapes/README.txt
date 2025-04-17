@@ -1,4 +1,4 @@
-NOTE all the best parameters in this folder were exported after a performing a
+NOTE all the best parameters in this folder were exported after performing a
 16 parameter grid search and minimizing the MAPE from a 10 fold forward chaining
 cross validation for every valid flight.
 
