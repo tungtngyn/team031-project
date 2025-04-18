@@ -14,19 +14,40 @@ Members:
 DESCRIPTION
 - This webapp is built in Python using `bokeh` and `holoviews` (for interactive visuals) and `scikit-learn`, `xgboost`, `catboost`, and `prophet` (for analytics).
 
+
 DATA
 - Download the csv file from [Kaggle] https://www.kaggle.com/datasets/bhavikjikadara/us-airline-flight-routes-and-fares-1993-2024/data
   - Note you will need a create a Kaggle account to downloads
   - Downloaded csv file is saved at `./data/raw-data.csv`
 
+
 DATA CLEANING & TRANSFORMATIONS
 - Open `./dev/data_preprocess.ipynb` and run Juypter Notebook
   - Creates processed data `./data/processed-data.csv` which is used by webapp
 
+
 GENERATE ANALYTICAL MODELS TO LOAD INTO WEBAPP
-(5 Models: XGBoost, CatBoost, Decision Tree, Random Forest, FB Prophet)
-  - TODO !!! 
-  - ADD how to get outputs saved from each ML model
+(5 Models: Decision Tree, Random Forest, XGBoost, CatBoost, FaceBook Prophet)
+
+  - Decision Tree & Random Forest (Tree-based)
+    - Run `./dev/DecisionTree_RandomForest.ipynb` to export models via pickle
+      - Creates `./models/best_decision_tree_regressor.pkl`
+      - Creates `./models/decision_and_forest_model_columns.pkl`
+
+  - XGBoost & CatBoost (Gradient Boosting)
+    - Run `./dev/XGBoost.ipynb` to export model via pickle
+      - Creates `./models/xgb_airfare_model.pkl`
+    - Run `./dev/CatBoost.ipynb` to export model via pickle
+      - Creates `./models/catboost_airfare_model.pkl`
+
+  - FB Prophet (Time Series Forecasting)
+    - Run `./src/fbp_tsa.py` using Section III.ii Option A to export forecasted dataframes as JSON
+      - Creates `./models/prophet_model_fare_forecast.json` when using custom function param ycol='fare'
+      - Creates `./models/prophet_model_farelg_forecast.json` when using custom function param ycol='fare_lg'
+      - Creates `./models/prophet_model_farelow_forecast.json` when using custom function param ycol='fare_low'
+
+  - Note: All models are loaded into webapp during launch
+
 
 ENIVRONMENT SETUP & INSTALLATION
 - Install Python 3.12 from the [python website](https://www.python.org/downloads/release/python-3120/), or using a package manager (e.g., `homebrew` or `anaconda`). 
@@ -40,7 +61,6 @@ source <your-venv-name>/activate
 
 pip install -r requirements.txt
 ```
-
 
 
 EXECUTION
@@ -58,6 +78,7 @@ bokeh serve --show app.py
 
 The app should now be running on `localhost:5006/app`. The `--show` command should automatically open a browser window.
 Note: should take a few seconds to boot up depending on your system hardware specfications.
+
 
 WEB APPLICATION LAYOUT & USER INTERACTION
 - Layout
@@ -80,7 +101,6 @@ WEB APPLICATION LAYOUT & USER INTERACTION
       - Analyze Button
       - Estimated Airfare Price
 
-
 - Interactivity
   - Graphics that update with 2 inputs: Origin & Destination Airports
     - All graphics
@@ -91,12 +111,15 @@ WEB APPLICATION LAYOUT & USER INTERACTION
       - Click "Analyze" to get estimated airfare price
     - Prophet forecasting requires 2 inputs origin & destination
       - Click "Analyze" to update time series graph by appending the 2 year forecast through 2026-Q1
-      - Note: Not all flights are eligible for forecasting, so graph will not update
-        - Will get print output from console
+      - Note: Not all flights are eligible for forecasting, so line graph will not update
+        - Will get error print output from console
         - Select another flight route
-
 
 - Toolbars and Hover Options
   - All graphics have a small toolbar attached to the right side
     - Controls pan, zoom, export, reset, etc.
   - Most graphics have hover options to show more detail
+
+
+TERMINATING WEBAPP
+- Close the tab in the browser and quit (CTRL+C or CMD+C) the localhost in the terminal
