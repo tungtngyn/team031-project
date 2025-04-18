@@ -59,6 +59,10 @@ Note: should take a few seconds to boot up depending on your system hardware spe
 
 APPENDIX
 
+Note: 
+- The Jupyter Notebooks and Python Scripts were developed independently of the app itself.
+- Thus, you may need to update filepaths inside the code itself depending on where you run the script / notebook. 
+
 DATA
 - Download the csv file from Kaggle (https://www.kaggle.com/datasets/bhavikjikadara/us-airline-flight-routes-and-fares-1993-2024/data)
   - Note you will need a create a Kaggle account to downloads
