@@ -79,6 +79,7 @@ GENERATE ANALYTICAL MODELS TO LOAD INTO WEBAPP
 
 - Decision Tree & Random Forest (Tree-Based)
   - Run `./APPENDIX/DecisionTree_RandomForest.ipynb` to export models via pickle
+    - Creates `./CODE/models/best_random_forest_regressor.pkl`
     - Creates `./CODE/models/best_decision_tree_regressor.pkl`
     - Creates `./CODE/models/decision_and_forest_model_columns.pkl`
 
