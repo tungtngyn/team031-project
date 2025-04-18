@@ -29,24 +29,24 @@ DATA CLEANING & TRANSFORMATIONS
 GENERATE ANALYTICAL MODELS TO LOAD INTO WEBAPP
 (5 Models: Decision Tree, Random Forest, XGBoost, CatBoost, FaceBook Prophet)
 
-  - Decision Tree & Random Forest (Tree-based)
-    - Run `./dev/DecisionTree_RandomForest.ipynb` to export models via pickle
-      - Creates `./models/best_decision_tree_regressor.pkl`
-      - Creates `./models/decision_and_forest_model_columns.pkl`
+- Decision Tree & Random Forest (Tree-based)
+  - Run `./dev/DecisionTree_RandomForest.ipynb` to export models via pickle
+    - Creates `./models/best_decision_tree_regressor.pkl`
+    - Creates `./models/decision_and_forest_model_columns.pkl`
 
-  - XGBoost & CatBoost (Gradient Boosting)
-    - Run `./dev/XGBoost.ipynb` to export model via pickle
-      - Creates `./models/xgb_airfare_model.pkl`
-    - Run `./dev/CatBoost.ipynb` to export model via pickle
-      - Creates `./models/catboost_airfare_model.pkl`
+- XGBoost & CatBoost (Gradient Boosting)
+  - Run `./dev/XGBoost.ipynb` to export model via pickle
+    - Creates `./models/xgb_airfare_model.pkl`
+  - Run `./dev/CatBoost.ipynb` to export model via pickle
+    - Creates `./models/catboost_airfare_model.pkl`
 
-  - FB Prophet (Time Series Forecasting)
-    - Run `./src/fbp_tsa.py` using Section III.ii Option A to export forecasted dataframes as JSON
-      - Creates `./models/prophet_model_fare_forecast.json` when using custom function param ycol='fare'
-      - Creates `./models/prophet_model_farelg_forecast.json` when using custom function param ycol='fare_lg'
-      - Creates `./models/prophet_model_farelow_forecast.json` when using custom function param ycol='fare_low'
+- FB Prophet (Time Series Forecasting)
+  - Run `./src/fbp_tsa.py` using Section III.ii Option A to export forecasted dataframes as JSON
+    - Creates `./models/prophet_model_fare_forecast.json` when using custom function param ycol='fare'
+    - Creates `./models/prophet_model_farelg_forecast.json` when using custom function param ycol='fare_lg'
+    - Creates `./models/prophet_model_farelow_forecast.json` when using custom function param ycol='fare_low'
 
-  - Note: All models are loaded into webapp during launch
+- Note: All models are loaded into webapp during launch
 
 
 ENIVRONMENT SETUP & INSTALLATION
