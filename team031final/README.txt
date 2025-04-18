@@ -15,42 +15,9 @@ DESCRIPTION
 - This webapp is built in Python using `bokeh` and `holoviews` (for interactive visuals) and `scikit-learn`, `xgboost`, `catboost`, and `prophet` (for analytics).
 
 
-DATA
-- Download the csv file from [Kaggle] https://www.kaggle.com/datasets/bhavikjikadara/us-airline-flight-routes-and-fares-1993-2024/data
-  - Note you will need a create a Kaggle account to downloads
-  - Downloaded csv file is saved at `./data/raw-data.csv`
 
-
-DATA CLEANING & TRANSFORMATIONS
-- Open `./dev/data_preprocess.ipynb` and run Juypter Notebook
-  - Creates processed data `./data/processed-data.csv` which is used by webapp
-
-
-GENERATE ANALYTICAL MODELS TO LOAD INTO WEBAPP
-(5 Models: Decision Tree, Random Forest, XGBoost, CatBoost, FaceBook Prophet)
-
-- Decision Tree & Random Forest (Tree-based)
-  - Run `./dev/DecisionTree_RandomForest.ipynb` to export models via pickle
-    - Creates `./models/best_decision_tree_regressor.pkl`
-    - Creates `./models/decision_and_forest_model_columns.pkl`
-
-- XGBoost & CatBoost (Gradient Boosting)
-  - Run `./dev/XGBoost.ipynb` to export model via pickle
-    - Creates `./models/xgb_airfare_model.pkl`
-  - Run `./dev/CatBoost.ipynb` to export model via pickle
-    - Creates `./models/catboost_airfare_model.pkl`
-
-- FB Prophet (Time Series Forecasting)
-  - Run `./src/fbp_tsa.py` using Section III.ii Option A to export forecasted dataframes as JSON
-    - Creates `./models/prophet_model_fare_forecast.json` when using custom function param ycol='fare'
-    - Creates `./models/prophet_model_farelg_forecast.json` when using custom function param ycol='fare_lg'
-    - Creates `./models/prophet_model_farelow_forecast.json` when using custom function param ycol='fare_low'
-
-- Note: All models are loaded into webapp during launch
-
-
-ENIVRONMENT SETUP & INSTALLATION
-- Install Python 3.12 from the [python website](https://www.python.org/downloads/release/python-3120/), or using a package manager (e.g., `homebrew` or `anaconda`). 
+INSTALLATION
+- Install Python 3.12 from the python website (https://www.python.org/downloads/release/python-3120/), or using a package manager (e.g., `homebrew` or `anaconda`). 
 
 - Create a virtual environment and install the packages in `requirements.txt`. Example commands for macOS and python's built-in `venv` module shown below.
 
@@ -62,13 +29,22 @@ source <your-venv-name>/activate
 pip install -r requirements.txt
 ```
 
+- Using this Google Drive link (https://drive.google.com/drive/folders/1gEzsVXkbRj4pyH-g0TAjDDVeKT_BfOaU?usp=sharing),
+  
+  - Download all the files in /data/ (Google Drive) and place them in ./CODE/data/ (Local Drive)
+  
+  - Download the model file in /models/ (Google Drive) and place them in ./CODE/models/ (Local Drive)
+
+- If you prefer to rebuild the /data/ files and /models/ files, please follow the instructions in the APPENDIX section of this README.txt
+
+
 
 EXECUTION
 To run the webapp locally, 
 
 1. Open your terminal app of choice (e.g., powershell, zsh, bash, etc.) and activate the virtual environment you created in the last step.
 
-2. Navigate to the top-level folder where `app.py` is. 
+2. Navigate to the top-level folder where `app.py` is (e.g., ./CODE/). 
 
 3. Run the following command:
 
@@ -78,6 +54,43 @@ bokeh serve --show app.py
 
 The app should now be running on `localhost:5006/app`. The `--show` command should automatically open a browser window.
 Note: should take a few seconds to boot up depending on your system hardware specfications.
+
+
+
+APPENDIX
+
+DATA
+- Download the csv file from Kaggle (https://www.kaggle.com/datasets/bhavikjikadara/us-airline-flight-routes-and-fares-1993-2024/data)
+  - Note you will need a create a Kaggle account to downloads
+  - Downloaded csv file is saved at `./data/raw-data.csv`
+
+
+DATA CLEANING & TRANSFORMATIONS
+- Open `./APPENDIX/data_preprocess.ipynb` and run Juypter Notebook
+  - Creates processed data `./data/processed-data.csv` which is used by webapp
+
+
+GENERATE ANALYTICAL MODELS TO LOAD INTO WEBAPP
+(5 Models: Decision Tree, Random Forest, XGBoost, CatBoost, FaceBook Prophet)
+
+- Decision Tree & Random Forest (Tree-Based)
+  - Run `./APPENDIX/DecisionTree_RandomForest.ipynb` to export models via pickle
+    - Creates `./CODE/models/best_decision_tree_regressor.pkl`
+    - Creates `./CODE/models/decision_and_forest_model_columns.pkl`
+
+- XGBoost & CatBoost (Gradient Boosting)
+  - Run `./APPENDIX/XGBoost.ipynb` to export model via pickle
+    - Creates `./CODE/models/xgb_airfare_model.pkl`
+  - Run `./APPENDIX/CatBoost.ipynb` to export model via pickle
+    - Creates `./CODE/models/catboost_airfare_model.pkl`
+
+- FB Prophet (Time Series Forecasting)
+  - Run `./CODE/src/fbp_tsa.py` using Section III.ii Option A to export forecasted dataframes as JSON
+    - Creates `./CODE/models/prophet_model_fare_forecast.json` when using custom function param ycol='fare'
+    - Creates `./CODE/models/prophet_model_farelg_forecast.json` when using custom function param ycol='fare_lg'
+    - Creates `./CODE/models/prophet_model_farelow_forecast.json` when using custom function param ycol='fare_low'
+
+- Note: All models are loaded into webapp during launch
 
 
 WEB APPLICATION LAYOUT & USER INTERACTION
